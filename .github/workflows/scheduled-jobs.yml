@@ -1,0 +1,15 @@
+name: Scheduled backend jobs
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+    - cron: '17 0 * * *'
+  workflow_dispatch:
+jobs:
+  invoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invoke protected scheduler endpoint
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SCHEDULER_TOKEN: ${{ secrets.SCHEDULER_TOKEN }}
+        run: curl --fail --silent --show-error --request POST "$SUPABASE_URL/functions/v1/scheduled-maintenance" --header "Authorization: Bearer $SCHEDULER_TOKEN" --header "Content-Type: application/json" --data '{"source":"github-actions"}'

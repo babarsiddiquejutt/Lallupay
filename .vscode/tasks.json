@@ -1,0 +1,23 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Supabase: Check CLI",
+      "type": "shell",
+      "command": "pnpm exec supabase --version",
+      "problemMatcher": []
+    },
+    {
+      "label": "Supabase: Link LaluPay project",
+      "type": "shell",
+      "command": "pnpm exec supabase link --project-ref cyrdhftyykibcsfjyczo",
+      "problemMatcher": []
+    },
+    {
+      "label": "Supabase: Push migrations",
+      "type": "shell",
+      "command": "pnpm exec supabase db push",
+      "problemMatcher": []
+    }
+  ]
+}

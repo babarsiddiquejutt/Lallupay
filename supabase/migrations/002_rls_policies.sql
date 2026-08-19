@@ -1,0 +1,11 @@
+create policy "profile owner reads" on public.profiles for select using (auth.uid() = id);
+create policy "profile owner updates" on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);
+create policy "wallet owner reads" on public.wallets for select using (auth.uid() = user_id);
+create policy "transaction owner reads" on public.transactions for select using (auth.uid() = user_id);
+create policy "notification owner manages" on public.notifications for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "active ads readable" on public.p2p_advertisements for select using (status = 'active' or owner_id = auth.uid());
+create policy "ad owners manage" on public.p2p_advertisements for all using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+create policy "order participants read" on public.p2p_orders for select using (auth.uid() in (buyer_id,seller_id));
+create policy "order participants read messages" on public.order_messages for select using (exists(select 1 from public.p2p_orders o where o.id=order_id and auth.uid() in(o.buyer_id,o.seller_id)));
+create policy "order participants send messages" on public.order_messages for insert with check (sender_id=auth.uid() and exists(select 1 from public.p2p_orders o where o.id=order_id and auth.uid() in(o.buyer_id,o.seller_id)));
+alter publication supabase_realtime add table public.transactions, public.notifications, public.p2p_orders, public.order_messages;
