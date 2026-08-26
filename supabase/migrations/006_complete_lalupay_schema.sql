@@ -169,4 +169,5 @@ create policy "admins update AML flags" on public.aml_risk_flags for update usin
 create policy "admins resolve disputes" on public.disputes for update using(public.current_user_has_permission('p2p.resolve')) with check(public.current_user_has_permission('p2p.resolve'));
 create policy "admins manage app releases" on public.app_releases for all using(public.current_user_has_permission('security.manage')) with check(public.current_user_has_permission('security.manage'));
 
-alter publication supabase_realtime add table public.deposits, public.withdrawals, public.disputes, public.webhook_deliveries;
+-- Note: public.disputes is already added to supabase_realtime by migration 004; re-adding it here would abort `db push`.
+alter publication supabase_realtime add table public.deposits, public.withdrawals, public.webhook_deliveries;
