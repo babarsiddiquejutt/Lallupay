@@ -1,0 +1,28 @@
+# LaluPay single-page app — Apache / InfinityFree configuration.
+#
+# The app uses React Router in `BrowserRouter` mode, so client-side routes such
+# as /auth, /dashboard, /wallet, /convert, /transfer and /p2p have no matching
+# file on disk. Without this rewrite, Apache returns 404 (InfinityFree then
+# redirects to errors.infinityfree.net/errors/404/) on any direct load,
+# bookmark or page refresh of a non-root path.
+#
+# Rule: serve real files and directories as-is (index.html, /assets/*.js,
+# /assets/*.css, images, etc.); route every other request to index.html so the
+# client-side router can render the correct view.
+#
+# Guarded by <IfModule> and intentionally free of any `Options` directive so it
+# cannot 500 the site if a directive is disallowed by the shared host.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # index.html is always served directly.
+  RewriteRule ^index\.html$ - [L]
+
+  # Do not touch requests that map to a real file or directory.
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+
+  # Everything else falls back to the SPA entry point.
+  RewriteRule . /index.html [L]
+</IfModule>
