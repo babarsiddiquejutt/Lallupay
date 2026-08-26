@@ -50,5 +50,7 @@ begin
   insert into audit_logs(actor_id,action,entity_type,entity_id,metadata) values(p_user,'conversion.executed','conversion',v_conversion::text,v_quote);
   return v_conversion;
 end; $$;
-revoke all on function public.quote_conversion(public.asset_code,public.asset_code,numeric) from public;
-revoke all on function public.execute_conversion(uuid,public.asset_code,public.asset_code,numeric,text) from public;
+revoke all on function public.quote_conversion(public.asset_code,public.asset_code,numeric) from public, authenticated, anon;
+grant execute on function public.quote_conversion(public.asset_code,public.asset_code,numeric) to service_role;
+revoke all on function public.execute_conversion(uuid,public.asset_code,public.asset_code,numeric,text) from public, authenticated, anon;
+grant execute on function public.execute_conversion(uuid,public.asset_code,public.asset_code,numeric,text) to service_role;
