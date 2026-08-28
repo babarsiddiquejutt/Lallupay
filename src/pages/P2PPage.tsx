@@ -524,7 +524,7 @@ export function P2PPage() {
         <OrderDetail orderId={orderId} userId={user.id} onBack={() => setOrderId(null)} />
       ) : (
         <>
-          <div className="section-heading" style={{ justifyContent: 'flex-start', gap: '1.25rem', marginBottom: '1rem' }}>
+          <div className="section-heading p2p-tabs" style={{ justifyContent: 'flex-start', gap: '1.25rem', marginBottom: '1rem' }}>
             {(Object.keys(tabLabels) as View[]).map((value) => (
               <button key={value} type="button" className="link-button" style={{ color: view === value ? '#fff' : undefined, fontWeight: view === value ? 700 : 400 }} onClick={() => setView(value)}>{tabLabels[value]}</button>
             ))}

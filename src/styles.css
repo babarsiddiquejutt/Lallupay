@@ -232,6 +232,8 @@ header {
   padding: clamp(1rem, 3vw, 1.5rem);
   box-shadow: var(--shadow-card);
   transition: box-shadow 0.2s;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 .card:hover { box-shadow: var(--shadow-card-hover); }
 .setup, .auth { max-width: 460px; width: 100%; }
@@ -245,7 +247,7 @@ header {
   text-transform: uppercase;
 }
 .hero { padding: 1rem 0 1.5rem; }
-.hero h1, h1 { margin: 0.375rem 0; font-size: clamp(1.5rem, 4vw, 2.5rem); line-height: 1.2; }
+.hero h1, h1 { margin: 0.375rem 0; font-size: clamp(1.5rem, 4vw, 2.5rem); line-height: 1.2; word-break: break-word; }
 h2 { margin: 0; font-size: 1.125rem; }
 p { margin: 0.5rem 0; color: var(--text-secondary); }
 small { color: var(--text-muted); }
@@ -283,6 +285,8 @@ small { color: var(--text-muted); }
   padding: 0.75rem 0;
   border-top: 1px solid #ffffff0a;
   font-size: 0.9375rem;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 /* --- Status Badges --- */
@@ -293,6 +297,7 @@ small { color: var(--text-muted); }
   padding: 0.125rem 0.5rem;
   border-radius: 999px;
   background: #ffffff0a;
+  white-space: nowrap;
 }
 .completed { color: var(--color-success); background: #4ade8012; }
 .pending, .review { color: var(--color-warning); background: #fbbf2412; }
@@ -314,7 +319,7 @@ input, select {
   border: 1px solid #ffffff1a;
   background: var(--brand-surface-2);
   color: var(--text-primary);
-  font-size: 1rem;
+  font-size: 16px; /* prevents iOS zoom on focus */
   transition: border-color 0.15s, box-shadow 0.15s;
   width: 100%;
 }
@@ -365,6 +370,12 @@ option { background: var(--brand-surface); color: var(--text-primary); }
   color: var(--brand-white);
 }
 .button.danger:hover { background: #fca5a5; }
+.button.small {
+  min-height: 36px;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  width: auto;
+}
 
 /* --- Link Button --- */
 .link-button {
@@ -406,6 +417,33 @@ option { background: var(--brand-surface); color: var(--text-primary); }
   font-size: 0.875rem;
 }
 
+/* --- Verification State --- */
+.verification-state {
+  text-align: center;
+  padding: 1.5rem 0;
+}
+.verification-state .icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+.verification-state h2 {
+  font-size: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+.verification-state p {
+  font-size: 0.9375rem;
+}
+.verification-state .email {
+  color: var(--brand-blue);
+  font-weight: 600;
+  word-break: break-all;
+}
+.countdown {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  margin-top: 0.5rem;
+}
+
 /* --- Message Status --- */
 [role="status"] {
   color: var(--text-secondary);
@@ -430,6 +468,17 @@ option { background: var(--brand-surface); color: var(--text-primary); }
   justify-self: end;
 }
 
+/* --- Action Buttons Row --- */
+.action-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.action-row .button {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ============================================
    RESPONSIVE: Mobile (max-width: 768px)
    ============================================ */
@@ -439,23 +488,30 @@ option { background: var(--brand-surface); color: var(--text-primary); }
   .mobile-nav { display: block; }
   .hamburger { display: block; }
 
-  /* Page padding */
-  .page { padding-bottom: calc(var(--mobile-nav-height) + 1.5rem + env(safe-area-inset-bottom, 0)); }
+  /* Page padding — extra bottom for mobile nav */
+  .page {
+    padding-top: 1rem;
+    padding-bottom: calc(var(--mobile-nav-height) + 1.5rem + env(safe-area-inset-bottom, 0));
+  }
 
   /* Header adjustments */
   header { padding: 0 1rem; height: 56px; }
+  header .brand { font-size: 1.125rem; }
 
   /* Transaction list: 2 columns on mobile */
   .transaction-list li {
     grid-template-columns: 1fr auto;
     gap: 0.5rem;
   }
-  .transaction-list li span:last-child { grid-column: 1 / -1; }
+  .transaction-list li span:last-child {
+    grid-column: 1 / -1;
+    font-size: 0.8125rem;
+  }
 
   /* Wallet grid: single column */
   .wallet-grid { grid-template-columns: 1fr; }
 
-  /* Section headings stack on very small screens */
+  /* Section headings stack */
   .section-heading { flex-direction: column; align-items: flex-start; gap: 0.25rem; }
 
   /* Cards: reduce padding */
@@ -465,11 +521,43 @@ option { background: var(--brand-surface); color: var(--text-primary); }
   .hero { padding: 0.5rem 0 1rem; }
   .hero h1, h1 { font-size: clamp(1.25rem, 5vw, 2rem); }
 
-  /* Forms: full width buttons */
+  /* Forms: full width buttons, prevent iOS zoom */
   .button { width: 100%; }
+  input, select { font-size: 16px; }
 
   /* Auth card */
   .auth { max-width: 100%; padding: 1.25rem; }
+
+  /* Action buttons stack vertically */
+  .action-row,
+  .section-heading:has(.button) {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .action-row .button,
+  .section-heading:has(.button) .button {
+    width: 100%;
+  }
+
+  /* P2P tabs: allow wrapping */
+  .p2p-tabs { flex-wrap: wrap; gap: 0.5rem !important; }
+
+  /* Order detail buttons */
+  .order-actions { flex-direction: column; }
+
+  /* Chat messages: full width on mobile */
+  .chat-bubble { max-width: 90%; }
+
+  /* Admin tables: horizontal scroll */
+  .admin-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -1rem;
+    padding: 0 1rem;
+  }
+
+  /* Overflow protection for all cards */
+  .card * { max-width: 100%; }
 }
 
 /* Small phones (320px–360px) */
@@ -477,6 +565,10 @@ option { background: var(--brand-surface); color: var(--text-primary); }
   .page { padding-left: 0.75rem; padding-right: 0.75rem; }
   .card { padding: 0.875rem; }
   h1 { font-size: 1.25rem; }
+  h2 { font-size: 1rem; }
+  .eyebrow { font-size: 0.6875rem; }
+  .mobile-nav a { min-width: 40px; font-size: 0.5625rem; }
+  .mobile-nav a .nav-icon { font-size: 1.125rem; }
 }
 
 /* Tablets (768px–1024px) */
