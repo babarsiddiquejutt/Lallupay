@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { Button, Card } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
 import { getMyProfile, updateMyProfile } from '../lib/db/profiles';
@@ -83,7 +84,7 @@ export function ProfilePage() {
               <li><span>Full name</span><span>{profile.full_name || '—'}</span></li>
               <li><span>Username</span><span>{profile.username ? `@${profile.username}` : '—'}</span></li>
               <li><span>Mobile</span><span>{profile.mobile || '—'}</span></li>
-              <li><span>KYC status</span><span className={`status ${profile.kyc_status === 'approved' ? 'completed' : 'pending'}`}>{profile.kyc_status.replace('_', ' ')}</span></li>
+              <li><span>KYC status</span><span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><span className={`status ${profile.kyc_status === 'approved' ? 'completed' : 'pending'}`}>{profile.kyc_status.replace('_', ' ')}</span>{profile.kyc_status !== 'approved' && <Link to="/kyc" style={{ fontSize: '0.8125rem' }}>Verify →</Link>}</span></li>
               <li><span>Member since</span><span>{formatTimestamp(profile.created_at)}</span></li>
             </ul>
           </>

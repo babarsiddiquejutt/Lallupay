@@ -5,6 +5,7 @@ import { ProfilePage } from './pages/ProfilePage';
 import { WalletPage } from './pages/WalletPage';
 import { ConvertPage } from './pages/ConvertPage';
 import { TransferPage } from './pages/TransferPage';
+import { KycPage } from './pages/KycPage';
 import { P2PPage } from './pages/P2PPage';
 import { useAuth } from './hooks/useAuth';
 import { useAdmin } from './hooks/useAdmin';
@@ -46,6 +47,7 @@ export function AppRoutes() {
         <Route path="/transfer" element={<TransferPage />} />
         <Route path="/p2p" element={<P2PPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/kyc" element={<KycPage />} />
         {/* Admin routes */}
         <Route element={<AdminRoute />}>
           <Route path="/admin" element={<AdminDashboardPage />} />
