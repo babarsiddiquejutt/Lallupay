@@ -89,7 +89,7 @@ export function TransferPage() {
   return (
     <main className="page">
       <div className="hero">
-        <span className="eyebrow">SANDBOX — NO REAL FUNDS</span>
+        <span className="eyebrow">LALLUPAY</span>
         <h1>Send money</h1>
         <p>Transfer instantly to another LaluPay account. Recipients, balances, and fees are all verified on the server.</p>
       </div>

@@ -515,7 +515,7 @@ export function P2PPage() {
   return (
     <main className="page">
       <div className="hero">
-        <span className="eyebrow">SANDBOX — NO REAL FUNDS</span>
+        <span className="eyebrow">LALLUPAY</span>
         <h1>P2P marketplace</h1>
         <p>Buy USDT from sellers by paying PKR directly via Easypaisa, JazzCash, or bank transfer. The seller's USDT is escrowed by LaluPay until they confirm your payment.</p>
       </div>

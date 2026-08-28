@@ -67,7 +67,7 @@ export function ProfilePage() {
   return (
     <main className="page">
       <div className="hero">
-        <span className="eyebrow">SANDBOX — NO REAL FUNDS</span>
+        <span className="eyebrow">LALLUPAY</span>
         <h1>Profile &amp; security</h1>
         <p>Manage your account details.</p>
       </div>

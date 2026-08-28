@@ -91,7 +91,7 @@ export async function getMyPaymentMethods(userId: string): Promise<PaymentMethod
 
 /**
  * Creates the caller's own payment method (RLS enforces user_id = auth.uid()).
- * `detail` is the payable identifier (e.g. wallet/account number). SANDBOX NOTE: it is stored in
+ * `detail` is the payable identifier (e.g. wallet/account number). NOTE: it is stored in
  * `encrypted_details` as-provided; production must encrypt this at rest. Never store more than needed.
  */
 export async function createPaymentMethod(input: { userId: string; methodType: PaymentMethodType; accountName: string; detail: string; }): Promise<PaymentMethod> {

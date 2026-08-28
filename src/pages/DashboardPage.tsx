@@ -51,7 +51,7 @@ export function DashboardPage() {
   return (
     <main className="page">
       <div className="hero">
-        <span className="eyebrow">SANDBOX — NO REAL FUNDS</span>
+        <span className="eyebrow">LALLUPAY</span>
         <h1>Your financial home</h1>
         <p>Balances and transactions update in real time.</p>
       </div>

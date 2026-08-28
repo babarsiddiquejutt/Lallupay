@@ -40,20 +40,37 @@ export function AuthPage() {
   }
 
   async function googleSignIn() {
-    if (supabase) await supabase.auth.signInWithOAuth({
+    if (!supabase) return;
+    setBusy(true);
+    setMessage('');
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/dashboard` },
+      options: {
+        redirectTo: `${window.location.origin}/dashboard`,
+        skipBrowserRedirect: false,
+      },
     });
+    if (error) {
+      setBusy(false);
+      // User-friendly error messages for common OAuth failures
+      if (error.message.includes('provider is not enabled')) {
+        setMessage('Google sign-in is not yet configured. Please use email login or contact support.');
+      } else if (error.message.includes('cancelled')) {
+        setMessage('Sign-in was cancelled.');
+      } else {
+        setMessage(error.message || 'Google sign-in failed. Please try again or use email login.');
+      }
+    }
+    // If no error, the browser will redirect to Google — busy state is intentional
   }
 
-  const title = view === 'forgot-password' ? 'Reset your password' : view === 'register' ? 'Create your account' : 'Sign in securely';
+  const title = view === 'forgot-password' ? 'Reset your password' : view === 'register' ? 'Create your account' : 'Sign in';
 
   return (
     <main className="center-page">
       <section className="auth card">
         <span className="eyebrow">Welcome to LaluPay</span>
         <h1>{title}</h1>
-        {view !== 'forgot-password' && <p>Sandbox environment — no real funds.</p>}
 
         <form onSubmit={(event) => void submit(event)}>
           <label>
@@ -72,7 +89,7 @@ export function AuthPage() {
         </form>
 
         {view !== 'forgot-password' && (
-          <Button className="secondary" onClick={() => void googleSignIn()}>Continue with Google</Button>
+          <Button className="secondary" onClick={() => void googleSignIn()} disabled={busy}>Continue with Google</Button>
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.5rem' }}>

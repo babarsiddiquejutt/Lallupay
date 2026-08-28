@@ -1,11 +1,11 @@
 # LaluPay delivery progress
 
 - [x] **Phase 1 — Foundation:** Vite React TypeScript app, Supabase client guard, email/password + Google authentication UI, typed data layer, RLS migration foundation, realtime helper, responsive shell, CI.
-- [x] **Phase 2 — Wallets & conversion:** Ledger-backed wallets, wallet realtime updates, server-side PKR ↔ USDT conversion quotes, atomic conversion execution with idempotency, rate and fee administration, sandbox/licensing guard.
+- [x] **Phase 2 — Wallets & conversion:** Ledger-backed wallets, wallet realtime updates, server-side PKR ↔ USDT conversion quotes, atomic conversion execution with idempotency, rate and fee administration, production licensing guard.
 - [x] **Phase 3 — Transfers:** Recipient lookup (username/email/mobile), server-authoritative internal transfer with advisory locking, idempotency, double-entry ledger, transfer ledger row, audit logging.
 - [x] **Phase 4 — P2P marketplace (SELL only):** Advertisements, USDT escrow order state machine, buyer→seller PKR settlement off-platform, payment proof upload, dispute opening/resolution, realtime order status and chat, payment method management, order expiry via scheduled maintenance.
-- [x] **Profile & notifications:** Profile display/edit, notification surface on Dashboard, realtime notification subscription.
-- [ ] **Phase 5 — Admin & compliance:** Admin dashboard, KYC review, AML/risk, reconciliation UI.
+- [x] **Profile & notifications:** Profile display/edit, KYC submission page, notification surface on Dashboard, realtime notification subscription.
+- [x] **Phase 5 — Admin & compliance:** Admin dashboard, user management, KYC review, transaction monitoring, P2P monitoring, dispute management, audit logs.
 - [ ] **Phase 6 — Partner API & webhooks.**
 - [ ] **Phase 7 — Expo mobile applications.**
 

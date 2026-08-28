@@ -1,14 +1,16 @@
 # LaluPay
 
-LaluPay is a sandbox-first digital-wallet platform foundation built with React, TypeScript, Supabase, and GitHub Actions. It is **not licensed or configured to custody real funds**. `system_config.sandbox_mode` starts enabled and live activity must remain blocked until legal, security, and operational reviews are complete.
+LaluPay is a production digital-wallet platform built with React, TypeScript, Supabase, and GitHub Actions. It supports PKR and USDT wallets, internal transfers, currency conversion, and a P2P marketplace with escrow.
+
+`system_config.sandbox_mode` is a production licensing gate that blocks financial mutations until legal, security, and operational reviews are complete and licensing is recorded.
 
 ## Included
 
-- Vite/React strict-TypeScript web foundation with responsive shell and friendly missing-Supabase screen.
-- Centralized typed Supabase client, domain data modules, Supabase Auth (email/password and Google), and cleanup-safe Postgres Changes subscriptions.
-- Forward-only Supabase migrations for profiles, wallets, a double-entry ledger, transactions, idempotency, notifications, P2P core, audit logs, RLS, and realtime publication.
-- A server-side, idempotent internal-transfer Edge Function backed by an atomic Postgres RPC. The browser cannot write ledger entries or balances.
-- CI, an opt-in GitHub Actions InfinityFree static deployment workflow, and a protected scheduler workflow template.
+- Vite/React strict-TypeScript web application with responsive UI and mobile navigation.
+- Centralized typed Supabase client, domain data modules, Supabase Auth (email/password and Google OAuth), and cleanup-safe Postgres Changes subscriptions.
+- Forward-only Supabase migrations for profiles, wallets, a double-entry ledger, transactions, idempotency, notifications, P2P core, KYC, admin roles, audit logs, RLS, and realtime publication.
+- Server-side, idempotent Edge Functions for transfers, conversions, P2P escrow, admin operations, and scheduled maintenance. The browser cannot write ledger entries or balances.
+- CI, GitHub Actions InfinityFree static deployment workflow, and a protected scheduler workflow.
 
 ## Local setup
 
@@ -22,13 +24,13 @@ LaluPay is a sandbox-first digital-wallet platform foundation built with React, 
 
 ## GitHub and InfinityFree
 
-Push to a GitHub repository, then configure these repository/environment secrets: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `INFINITYFREE_FTP_SERVER`, `INFINITYFREE_FTP_USERNAME`, `INFINITYFREE_FTP_PASSWORD`, `INFINITYFREE_FTP_PATH`, `SUPABASE_URL`, and `SCHEDULER_TOKEN`.
+Push to a GitHub repository, then configure these repository/environment secrets: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `FTP_HOST`, `FTP_USERNAME`, `FTP_PASSWORD`, `SUPABASE_URL`, and `SCHEDULER_TOKEN`.
 
-The deploy workflow only uploads `dist/` and never handles a service-role key. Add the final InfinityFree domain to Supabase Auth Site URL and Redirect URLs before enabling automatic deployment.
+The deploy workflow only uploads `dist/` and never handles a service-role key. Add the production domain to Supabase Auth Site URL and Redirect URLs before enabling automatic deployment.
 
 ## Supabase security model
 
-The frontend client is created exclusively from `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. No browser module references a service-role key. RLS permits users to read only their own financial records; balance, ledger, conversion, withdrawal, and transfer mutations have no client policy. The browser calls the `transfer` Edge Function, which validates the caller’s JWT before using the service-role key held exclusively in Supabase Edge Function secrets. Ledger and audit rows are immutable at the database layer.
+The frontend client is created exclusively from `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. No browser module references a service-role key. RLS permits users to read only their own financial records; balance, ledger, conversion, withdrawal, and transfer mutations have no client policy. The browser calls Edge Functions, which validate the caller's JWT before using the service-role key held exclusively in Supabase Edge Function secrets. Ledger and audit rows are immutable at the database layer.
 
 ## Security boundary
 

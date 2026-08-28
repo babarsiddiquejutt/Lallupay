@@ -125,7 +125,7 @@ export function KycPage() {
   return (
     <main className="page">
       <div className="hero">
-        <span className="eyebrow">SANDBOX — NO REAL FUNDS</span>
+        <span className="eyebrow">LALLUPAY</span>
         <h1>Identity verification</h1>
         <p>Submit your identity documents to verify your account. Verified accounts can access all platform features.</p>
       </div>
