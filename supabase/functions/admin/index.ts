@@ -4,7 +4,11 @@ import { requiredEnv } from '../_shared/env.ts';
 type AdminRequest =
   | { action: 'updateKyc'; userId: string; status: 'approved' | 'rejected'; rejectionReason?: string }
   | { action: 'resolveDispute'; disputeId: string; outcome: 'release_to_buyer' | 'refund_to_seller'; resolution: string }
-  | { action: 'adminStats' };
+  | { action: 'adminStats' }
+  | { action: 'setRate'; asset: string; buyRate: string; sellRate: string }
+  | { action: 'getRate'; asset: string }
+  | { action: 'setFee'; operation: string; asset: string; flatAmount: string; percentage: string }
+  | { action: 'getFees' };
 
 const headers = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers });
@@ -63,6 +67,36 @@ Deno.serve(async (request) => {
       totalOrders: orders.count ?? 0,
       openDisputes: disputes.count ?? 0,
     }, 200);
+  }
+
+  if (body.action === 'setRate') {
+    if (!['PKR', 'USDT'].includes(body.asset)) return reply({ error: 'Invalid asset' }, 400);
+    const buyRate = parseFloat(body.buyRate);
+    const sellRate = parseFloat(body.sellRate);
+    if (isNaN(buyRate) || buyRate <= 0 || isNaN(sellRate) || sellRate <= 0) return reply({ error: 'Invalid rate values' }, 400);
+    const { data, error } = await admin.rpc('admin_set_rate', { p_asset: body.asset, p_buy_rate: buyRate, p_sell_rate: sellRate, p_admin: user.id });
+    return error ? reply({ error: error.message }, 400) : reply({ rateId: data }, 201);
+  }
+
+  if (body.action === 'getRate') {
+    if (!['PKR', 'USDT'].includes(body.asset)) return reply({ error: 'Invalid asset' }, 400);
+    const { data, error } = await admin.rpc('admin_get_current_rate', { p_asset: body.asset });
+    return error ? reply({ error: error.message }, 400) : reply(data);
+  }
+
+  if (body.action === 'setFee') {
+    if (!['deposit', 'withdrawal', 'conversion', 'transfer', 'p2p'].includes(body.operation)) return reply({ error: 'Invalid operation' }, 400);
+    if (!['PKR', 'USDT'].includes(body.asset)) return reply({ error: 'Invalid asset' }, 400);
+    const flatAmount = parseFloat(body.flatAmount);
+    const percentage = parseFloat(body.percentage);
+    if (isNaN(flatAmount) || flatAmount < 0 || isNaN(percentage) || percentage < 0 || percentage > 100) return reply({ error: 'Invalid fee values' }, 400);
+    const { data, error } = await admin.rpc('admin_set_fee', { p_operation: body.operation, p_asset: body.asset, p_flat_amount: flatAmount, p_percentage: percentage, p_admin: user.id });
+    return error ? reply({ error: error.message }, 400) : reply({ feeId: data }, 201);
+  }
+
+  if (body.action === 'getFees') {
+    const { data, error } = await admin.rpc('admin_get_current_fees');
+    return error ? reply({ error: error.message }, 400) : reply(data);
   }
 
   return reply({ error: 'Unsupported action' }, 400);

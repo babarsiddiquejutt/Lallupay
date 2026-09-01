@@ -67,6 +67,7 @@ export function AdminDashboardPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
           <Link to="/admin/kyc" className="button" style={{ textAlign: 'center', textDecoration: 'none' }}>KYC Review</Link>
           <Link to="/admin/disputes" className="button" style={{ textAlign: 'center', textDecoration: 'none' }}>Disputes</Link>
+          <Link to="/admin/rates" className="button secondary" style={{ textAlign: 'center', textDecoration: 'none' }}>Rates & Fees</Link>
           <Link to="/admin/users" className="button secondary" style={{ textAlign: 'center', textDecoration: 'none' }}>User Search</Link>
           <Link to="/admin/audit" className="button secondary" style={{ textAlign: 'center', textDecoration: 'none' }}>Audit Logs</Link>
         </div>

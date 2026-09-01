@@ -18,6 +18,7 @@ import { AdminTransactionsPage } from './pages/admin/AdminTransactionsPage';
 import { AdminP2PPage } from './pages/admin/AdminP2PPage';
 import { AdminDisputesPage } from './pages/admin/AdminDisputesPage';
 import { AdminAuditPage } from './pages/admin/AdminAuditPage';
+import { AdminRatesPage } from './pages/admin/AdminRatesPage';
 
 function ProtectedRoute() {
   const { user, loading } = useAuth();
@@ -57,6 +58,7 @@ export function AppRoutes() {
           <Route path="/admin/p2p" element={<AdminP2PPage />} />
           <Route path="/admin/disputes" element={<AdminDisputesPage />} />
           <Route path="/admin/audit" element={<AdminAuditPage />} />
+          <Route path="/admin/rates" element={<AdminRatesPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

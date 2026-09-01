@@ -30,3 +30,19 @@ export interface AdminStats { totalUsers: number; totalTransactions: number; tot
 export function adminGetStats(): Promise<AdminStats> {
   return invokeAdmin<AdminStats>({ action: 'adminStats' });
 }
+
+export interface AdminRate { id: string; asset_code: string; buy_rate: number; sell_rate: number; version: number; created_at: string; }
+export function adminSetRate(asset: string, buyRate: string, sellRate: string): Promise<{ rateId: string }> {
+  return invokeAdmin<{ rateId: string }>({ action: 'setRate', asset, buyRate, sellRate });
+}
+export function adminGetRate(asset: string): Promise<AdminRate | null> {
+  return invokeAdmin<AdminRate | null>({ action: 'getRate', asset });
+}
+
+export interface AdminFee { id: string; operation: string; asset_code: string; flat_amount: number; percentage: number; created_at: string; }
+export function adminSetFee(operation: string, asset: string, flatAmount: string, percentage: string): Promise<{ feeId: string }> {
+  return invokeAdmin<{ feeId: string }>({ action: 'setFee', operation, asset, flatAmount, percentage });
+}
+export function adminGetFees(): Promise<AdminFee[]> {
+  return invokeAdmin<AdminFee[]>({ action: 'getFees' });
+}
