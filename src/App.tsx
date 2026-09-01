@@ -42,8 +42,10 @@ function Shell() {
     { to: '/dashboard', label: 'Home', icon: icons.home },
     { to: '/wallet', label: 'Wallet', icon: icons.wallet },
     { to: '/convert', label: 'Convert', icon: icons.convert },
-    { to: '/transfer', label: 'Transfer', icon: icons.transfer },
     { to: '/p2p', label: 'P2P', icon: icons.p2p },
+    { to: '/transfer', label: 'Transfer', icon: icons.transfer },
+    { to: '/deposit', label: 'Deposit', icon: icons.home },
+    { to: '/withdraw', label: 'Withdraw', icon: icons.wallet },
     { to: '/profile', label: 'Profile', icon: icons.profile },
   ];
   if (isAdmin) navItems.push({ to: '/admin', label: 'Admin', icon: icons.admin });

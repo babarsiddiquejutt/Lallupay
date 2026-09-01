@@ -8,7 +8,16 @@ type AdminRequest =
   | { action: 'setRate'; asset: string; buyRate: string; sellRate: string }
   | { action: 'getRate'; asset: string }
   | { action: 'setFee'; operation: string; asset: string; flatAmount: string; percentage: string }
-  | { action: 'getFees' };
+  | { action: 'getFees' }
+  | { action: 'submitDeposit'; txid: string; amount: string; address?: string }
+  | { action: 'confirmDeposit'; depositId: string }
+  | { action: 'rejectDeposit'; depositId: string; reason?: string }
+  | { action: 'requestWithdrawal'; amount: string; address: string; idempotencyKey?: string }
+  | { action: 'approveWithdrawal'; withdrawalId: string }
+  | { action: 'completeWithdrawal'; withdrawalId: string; txid: string }
+  | { action: 'rejectWithdrawal'; withdrawalId: string; reason?: string }
+  | { action: 'getDeposits' }
+  | { action: 'getWithdrawals' };
 
 const headers = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers });
@@ -96,6 +105,59 @@ Deno.serve(async (request) => {
 
   if (body.action === 'getFees') {
     const { data, error } = await admin.rpc('admin_get_current_fees');
+    return error ? reply({ error: error.message }, 400) : reply(data);
+  }
+
+  // ── Deposit / Withdrawal (user-facing) ──
+
+  if (body.action === 'submitDeposit') {
+    const amount = parseFloat(body.amount);
+    if (isNaN(amount) || amount <= 0) return reply({ error: 'Invalid deposit amount' }, 400);
+    const { data, error } = await admin.rpc('submit_deposit', { p_user: user.id, p_txid: body.txid, p_amount: amount, p_address: body.address ?? null });
+    return error ? reply({ error: error.message }, 400) : reply({ depositId: data }, 201);
+  }
+
+  if (body.action === 'requestWithdrawal') {
+    const amount = parseFloat(body.amount);
+    if (isNaN(amount) || amount <= 0) return reply({ error: 'Invalid withdrawal amount' }, 400);
+    const { data, error } = await admin.rpc('request_withdrawal', { p_user: user.id, p_amount: amount, p_address: body.address, p_idempotency_key: body.idempotencyKey ?? null });
+    return error ? reply({ error: error.message }, 400) : reply({ withdrawalId: data }, 201);
+  }
+
+  // ── Admin-only: confirm/reject/approve/complete ──
+
+  if (body.action === 'confirmDeposit') {
+    const { data, error } = await admin.rpc('admin_confirm_deposit', { p_deposit: body.depositId, p_admin: user.id });
+    return error ? reply({ error: error.message }, 400) : reply({ depositId: data });
+  }
+
+  if (body.action === 'rejectDeposit') {
+    const { data, error } = await admin.rpc('admin_reject_deposit', { p_deposit: body.depositId, p_admin: user.id, p_reason: body.reason ?? null });
+    return error ? reply({ error: error.message }, 400) : reply({ depositId: data });
+  }
+
+  if (body.action === 'approveWithdrawal') {
+    const { data, error } = await admin.rpc('admin_approve_withdrawal', { p_withdrawal: body.withdrawalId, p_admin: user.id });
+    return error ? reply({ error: error.message }, 400) : reply({ withdrawalId: data });
+  }
+
+  if (body.action === 'completeWithdrawal') {
+    const { data, error } = await admin.rpc('admin_complete_withdrawal', { p_withdrawal: body.withdrawalId, p_admin: user.id, p_txid: body.txid });
+    return error ? reply({ error: error.message }, 400) : reply({ withdrawalId: data });
+  }
+
+  if (body.action === 'rejectWithdrawal') {
+    const { data, error } = await admin.rpc('admin_reject_withdrawal', { p_withdrawal: body.withdrawalId, p_admin: user.id, p_reason: body.reason ?? null });
+    return error ? reply({ error: error.message }, 400) : reply({ withdrawalId: data });
+  }
+
+  if (body.action === 'getDeposits') {
+    const { data, error } = await admin.from('deposits').select('*').order('created_at', { ascending: false }).limit(100);
+    return error ? reply({ error: error.message }, 400) : reply(data);
+  }
+
+  if (body.action === 'getWithdrawals') {
+    const { data, error } = await admin.from('withdrawals').select('*').order('created_at', { ascending: false }).limit(100);
     return error ? reply({ error: error.message }, 400) : reply(data);
   }
 
