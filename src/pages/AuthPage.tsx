@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { Button } from '../components/ui';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
+import { checkLoginLock, recordLoginFailure, clearLoginAttempts } from '../lib/api/auth';
 
 type AuthView = 'login' | 'register' | 'forgot-password' | 'verify-email';
 
@@ -20,9 +21,32 @@ export function AuthPage() {
   const [countdown, setCountdown] = useState(0);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Cleanup countdown on unmount
+  // Brute-force lock state
+  const [lockRemaining, setLockRemaining] = useState(0);
+  const lockCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Cleanup countdowns on unmount
   useEffect(() => {
-    return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      if (lockCountdownRef.current) clearInterval(lockCountdownRef.current);
+    };
+  }, []);
+
+  const startLockCountdown = useCallback((seconds: number) => {
+    setLockRemaining(seconds);
+    if (lockCountdownRef.current) clearInterval(lockCountdownRef.current);
+    lockCountdownRef.current = setInterval(() => {
+      setLockRemaining((prev) => {
+        if (prev <= 1) {
+          if (lockCountdownRef.current) clearInterval(lockCountdownRef.current);
+          setMessage('You can now try signing in again.');
+          setMessageType('success');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
   }, []);
 
   const startCountdown = useCallback(() => {
@@ -55,6 +79,16 @@ export function AuthPage() {
     }
   }, [countdown, startCountdown]);
 
+  // Check lock on mount / when email changes
+  useEffect(() => {
+    if (view !== 'login' || !email) return;
+    void checkLoginLock(email).then((status) => {
+      if (status.locked && status.remaining_seconds > 0) {
+        startLockCountdown(status.remaining_seconds);
+      }
+    });
+  }, [email, view, startLockCountdown]);
+
   if (user) return <Navigate to="/dashboard" replace />;
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -72,6 +106,10 @@ export function AuthPage() {
       if (error) {
         setMessage(error.message);
       } else {
+        // Clear any lock on this email since password reset is a recovery path
+        void clearLoginAttempts(email);
+        setLockRemaining(0);
+        if (lockCountdownRef.current) clearInterval(lockCountdownRef.current);
         setMessage('Check your email for a password reset link.');
         setMessageType('success');
       }
@@ -108,22 +146,48 @@ export function AuthPage() {
       return;
     }
 
-    // Login
+    // ─── Login ───
+    // Check lock before attempting
+    const lockStatus = await checkLoginLock(email);
+    if (lockStatus.locked && lockStatus.remaining_seconds > 0) {
+      setBusy(false);
+      startLockCountdown(lockStatus.remaining_seconds);
+      setMessage(`Account temporarily locked due to too many failed attempts. Try again in ${formatLockTime(lockStatus.remaining_seconds)}.`);
+      setMessageType('error');
+      return;
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
 
     if (error) {
       const msg = error.message.toLowerCase();
 
+      // Record the failed attempt and check if we've now locked the account
+      const updatedLock = await recordLoginFailure(email);
+
       // Detect unverified email
       if (msg.includes('email not confirmed') || msg.includes('verify your email')) {
         setView('verify-email');
         setMessage('Please verify your email address before logging in.');
         setMessageType('error');
-        // Pre-fill resend if countdown is done
         if (countdown === 0) {
           void resendVerification(email);
         }
+        return;
+      }
+
+      if (updatedLock.locked && updatedLock.remaining_seconds > 0) {
+        startLockCountdown(updatedLock.remaining_seconds);
+        setMessage(`Account locked due to too many failed attempts. Try again in ${formatLockTime(updatedLock.remaining_seconds)}.`);
+        setMessageType('error');
+        return;
+      }
+
+      const remainingAttempts = 3 - updatedLock.attempts;
+      if (remainingAttempts > 0 && remainingAttempts < 3) {
+        setMessage(`Incorrect email or password. ${remainingAttempts} attempt${remainingAttempts === 1 ? '' : 's'} remaining before lockout.`);
+        setMessageType('error');
         return;
       }
 
@@ -143,6 +207,10 @@ export function AuthPage() {
       return;
     }
 
+    // Successful login — clear any failed attempts
+    void clearLoginAttempts(email);
+    setLockRemaining(0);
+    if (lockCountdownRef.current) clearInterval(lockCountdownRef.current);
     setMessage('Signed in successfully.');
     setMessageType('success');
   }
@@ -248,7 +316,7 @@ export function AuthPage() {
               <input required minLength={8} type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={view === 'register' ? 'new-password' : 'current-password'} />
             </label>
           )}
-          <Button disabled={busy} type="submit">
+          <Button disabled={busy || (view === 'login' && lockRemaining > 0)} type="submit">
             {busy ? 'Please wait…' : view === 'forgot-password' ? 'Send reset link' : view === 'register' ? 'Create account' : 'Sign in'}
           </Button>
         </form>
@@ -272,6 +340,12 @@ export function AuthPage() {
           )}
         </div>
 
+        {lockRemaining > 0 && (
+          <p role="status" className="error">
+            Account locked. Try again in {formatLockTime(lockRemaining)}.
+          </p>
+        )}
+
         {message && (
           <p role="status" className={messageType === 'error' ? 'error' : 'notice'}>
             {message}
@@ -281,4 +355,13 @@ export function AuthPage() {
       </section>
     </main>
   );
+}
+
+function formatLockTime(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  if (mins > 0) return `${mins}m ${secs}s`;
+  return `${secs}s`;
 }
