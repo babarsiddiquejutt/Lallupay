@@ -4,6 +4,7 @@ import type { PaymentMethodType } from '../../types/database';
 interface OrderResponse { orderId: string; }
 interface DisputeResponse { disputeId: string; }
 export interface OrderPaymentDetails { methodType: PaymentMethodType; accountName: string; accountReferenceMasked: string; payableDetail: string; }
+export interface SellerStats { completed_30d: number; total_30d: number; completion_rate: number; avg_rating: number; total_reviews: number; }
 
 /** Surfaces the Edge Function's own error message (e.g. "Insufficient USDT balance") instead of the SDK's generic status text. */
 async function readFunctionError(error: unknown): Promise<string> {
@@ -50,4 +51,19 @@ export function openDispute(input: { orderId: string; reason: string; }): Promis
 /** Fetches the seller's payable account details for an order. The server returns these only to the two order participants. */
 export function getOrderPaymentDetails(orderId: string): Promise<OrderPaymentDetails> {
   return invokeP2p<OrderPaymentDetails>({ action: 'paymentDetails', orderId });
+}
+
+/** Submit a review after a completed P2P order. */
+export function submitReview(input: { orderId: string; reviewedUser: string; rating: number; comment?: string }): Promise<{ reviewId: string }> {
+  return invokeP2p<{ reviewId: string }>({ action: 'submitReview', ...input });
+}
+
+/** Get seller stats (30-day completion, avg rating, review count). */
+export function getSellerStats(sellerId: string): Promise<SellerStats> {
+  return invokeP2p<SellerStats>({ action: 'sellerStats', sellerId });
+}
+
+/** Send a heartbeat to keep the seller's advertisement online. */
+export function sendHeartbeat(): Promise<{ ok: boolean }> {
+  return invokeP2p<{ ok: boolean }>({ action: 'heartbeat' });
 }

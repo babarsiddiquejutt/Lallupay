@@ -11,7 +11,10 @@ type P2pRequest =
   | { action: 'cancel'; orderId: string }
   | { action: 'openDispute'; orderId: string; reason: string }
   | { action: 'resolveDispute'; disputeId: string; outcome: 'release_to_buyer' | 'refund_to_seller'; resolution: string }
-  | { action: 'paymentDetails'; orderId: string };
+  | { action: 'paymentDetails'; orderId: string }
+  | { action: 'submitReview'; orderId: string; reviewedUser: string; rating: number; comment?: string }
+  | { action: 'sellerStats'; sellerId: string }
+  | { action: 'heartbeat' };
 
 const headers = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers });
@@ -74,6 +77,24 @@ Deno.serve(async (request) => {
     const match = Array.isArray(data) ? data[0] : data;
     if (!match) return reply({ error: 'No payment details are available for this order.' }, 404);
     return reply({ methodType: match.method_type, accountName: match.account_name, accountReferenceMasked: match.account_reference_masked, payableDetail: match.payable_detail });
+  }
+
+  if (body.action === 'submitReview') {
+    if (!isUuid(body.orderId) || !isUuid(body.reviewedUser) || typeof body.rating !== 'number' || body.rating < 1 || body.rating > 5) return reply({ error: 'Invalid review request' }, 400);
+    if (body.comment !== undefined && typeof body.comment !== 'string') return reply({ error: 'Invalid review comment' }, 400);
+    const { data, error } = await admin.rpc('submit_p2p_review', { p_order: body.orderId, p_reviewer: user.id, p_reviewed_user: body.reviewedUser, p_rating: body.rating, p_comment: body.comment ?? null });
+    return error ? reply({ error: error.message }, 400) : reply({ reviewId: data }, 201);
+  }
+
+  if (body.action === 'sellerStats') {
+    if (!isUuid(body.sellerId)) return reply({ error: 'Invalid request' }, 400);
+    const { data, error } = await admin.rpc('get_seller_stats', { p_seller: body.sellerId });
+    return error ? reply({ error: error.message }, 400) : reply(data);
+  }
+
+  if (body.action === 'heartbeat') {
+    await admin.rpc('update_seller_heartbeat', { p_user: user.id });
+    return reply({ ok: true });
   }
 
   return reply({ error: 'Unsupported action' }, 400);

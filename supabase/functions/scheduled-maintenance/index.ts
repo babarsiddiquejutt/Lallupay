@@ -24,5 +24,13 @@ Deno.serve(async (request) => {
     results.p2pOrderExpiry = { error: reason instanceof Error ? reason.message : 'Unknown error' };
   }
 
+  // 2. Auto-offline sellers inactive for >60 minutes.
+  try {
+    const { data, error } = await admin.rpc('offline_inactive_sellers');
+    results.sellerAutoOffline = error ? { error: error.message } : { offlineCount: data ?? 0 };
+  } catch (reason) {
+    results.sellerAutoOffline = { error: reason instanceof Error ? reason.message : 'Unknown error' };
+  }
+
   return json({ accepted: true, ran_at: new Date().toISOString(), results }, 202);
 });

@@ -1,7 +1,7 @@
 export type AssetCode = 'PKR' | 'USDT';
 export type KycStatus = 'not_started' | 'pending' | 'approved' | 'rejected';
 export type TransactionStatus = 'pending' | 'completed' | 'failed' | 'cancelled' | 'review';
-export type PaymentMethodType = 'bank' | 'jazzcash' | 'easypaisa';
+export type PaymentMethodType = 'bank' | 'jazzcash' | 'easypaisa' | 'nayapay' | 'cashmaal';
 export type P2pOrderStatus = 'created' | 'payment_sent' | 'completed' | 'cancelled' | 'disputed' | 'expired';
 export type DisputeStatus = 'open' | 'resolved' | 'rejected';
 
@@ -19,6 +19,7 @@ export interface P2pOrder {
 export interface OrderMessage { id: string; order_id: string; sender_id: string; body: string; created_at: string; }
 export interface PaymentMethod { id: string; user_id: string; method_type: PaymentMethodType; account_name: string; account_reference_masked: string; active: boolean; created_at: string; updated_at: string; }
 export interface P2pDispute { id: string; order_id: string; opened_by: string; reason: string; status: DisputeStatus; resolution: string | null; resolved_by: string | null; resolved_at: string | null; created_at: string; }
+export interface P2pReview { id: string; order_id: string; reviewer_id: string; reviewed_user_id: string; rating: number; comment: string | null; created_at: string; }
 
 type DatabaseTable<Row, Insert, Update> = {
   Row: Row & Record<string, unknown>;

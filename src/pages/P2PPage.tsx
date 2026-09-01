@@ -10,6 +10,7 @@ import {
 } from '../lib/db/p2p';
 import {
   createSellOrder, markPaymentSent, releaseOrder, cancelOrder, openDispute, getOrderPaymentDetails,
+  submitReview, sendHeartbeat,
   type OrderPaymentDetails,
 } from '../lib/api/p2p';
 import type { P2pAdvertisement, P2pOrder, OrderMessage, PaymentMethod, PaymentMethodType, P2pOrderStatus, P2pDispute } from '../types/database';
@@ -19,7 +20,7 @@ const pkrPattern = /^\d+(\.\d{1,2})?$/;
 const pricePattern = /^\d+(\.\d{1,6})?$/;
 const shortId = (id: string) => `#${id.slice(0, 8)}`;
 const trimNum = (value: string) => (value.includes('.') ? value.replace(/0+$/, '').replace(/\.$/, '') : value);
-const methodLabels: Record<PaymentMethodType, string> = { bank: 'Bank transfer', jazzcash: 'JazzCash', easypaisa: 'Easypaisa' };
+const methodLabels: Record<PaymentMethodType, string> = { bank: 'Bank transfer', jazzcash: 'JazzCash', easypaisa: 'Easypaisa', nayapay: 'NayaPay', cashmaal: 'Cashmaal' };
 // Map the six order states onto the palette that already exists in styles.css — no new CSS.
 const statusMeta: Record<P2pOrderStatus, { label: string; cls: string }> = {
   created: { label: 'Awaiting payment', cls: 'pending' },
@@ -77,6 +78,9 @@ function MarketTab({ userId, onOpenOrder }: { userId: string; onOpenOrder: (orde
         <Card key={ad.id}>
           <div className="section-heading"><h2>{trimNum(ad.price)} PKR/USDT</h2><span className="status">Seller {shortId(ad.owner_id)}</span></div>
           <ul className="transaction-list">
+            {(ad as P2pAdvertisement & { discount_percent?: number }).discount_percent != null && Number((ad as P2pAdvertisement & { discount_percent?: number }).discount_percent) > 0 && (
+              <li><span>Discount</span><span style={{ color: 'var(--color-success)' }}><strong>{trimNum(String((ad as P2pAdvertisement & { discount_percent?: number }).discount_percent))}% off</strong></span></li>
+            )}
             <li><span>Limits</span><span>{formatAssetAmount(ad.min_amount, 'PKR')} – {formatAssetAmount(ad.max_amount, 'PKR')}</span></li>
             <li><span>Payment window</span><span>{ad.payment_window_minutes} min</span></li>
           </ul>
@@ -159,6 +163,10 @@ function OrderDetail({ orderId, userId, onBack }: { orderId: string; userId: str
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  // Review state
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [showReview, setShowReview] = useState(false);
 
   const loadOrder = useCallback(async () => {
     try { setOrder(await getOrder(orderId)); }
@@ -236,6 +244,20 @@ function OrderDetail({ orderId, userId, onBack }: { orderId: string; userId: str
     if (!order?.payment_proof_path) return;
     try { const url = await getPaymentProofUrl(order.payment_proof_path); if (url) window.open(url, '_blank', 'noopener'); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to open the proof.'); }
+  }
+
+  async function submitReviewAction() {
+    if (!order) return;
+    setError(''); setNotice(''); setBusy(true);
+    try {
+      await submitReview({ orderId, reviewedUser: counterpartyId, rating: reviewRating, comment: reviewComment.trim() || undefined });
+      setNotice('Review submitted. Thank you!');
+      setShowReview(false);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to submit review.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   const counterpartyId = order ? (isBuyer ? order.seller_id : order.buyer_id) : '';
@@ -316,7 +338,30 @@ function OrderDetail({ orderId, userId, onBack }: { orderId: string; userId: str
                 {dispute && <p><small>Reason: {dispute.reason}</small></p>}
               </>
             )}
-            {order.status === 'completed' && <p>Completed. The escrowed USDT was released to the buyer.</p>}
+            {order.status === 'completed' && (
+              <>
+                <p>Completed. The escrowed USDT was released to the buyer.</p>
+                {!showReview && <Button className="secondary" onClick={() => setShowReview(true)}>Leave a review</Button>}
+                {showReview && (
+                  <form onSubmit={(event) => { event.preventDefault(); void submitReviewAction(); }}>
+                    <label>Rating
+                      <select value={reviewRating} onChange={(event) => setReviewRating(Number(event.target.value))}>
+                        <option value={5}>⭐⭐⭐⭐⭐ (5)</option>
+                        <option value={4}>⭐⭐⭐⭐ (4)</option>
+                        <option value={3}>⭐⭐⭐ (3)</option>
+                        <option value={2}>⭐⭐ (2)</option>
+                        <option value={1}>⭐ (1)</option>
+                      </select>
+                    </label>
+                    <label>Comment (optional)
+                      <input value={reviewComment} onChange={(event) => setReviewComment(event.target.value)} placeholder="How was your experience?" maxLength={500} />
+                    </label>
+                    <Button type="submit" disabled={busy}>{busy ? 'Submitting…' : 'Submit review'}</Button>
+                    <button type="button" className="link-button" onClick={() => setShowReview(false)}>Cancel</button>
+                  </form>
+                )}
+              </>
+            )}
             {order.status === 'cancelled' && <p>Cancelled. The escrowed USDT was refunded to the seller.</p>}
             {order.status === 'expired' && <p>Expired before payment was confirmed. The escrow was refunded to the seller.</p>}
 
@@ -371,6 +416,7 @@ function SellTab({ userId }: { userId: string }) {
   const [price, setPrice] = useState('');
   const [minAmount, setMinAmount] = useState('');
   const [maxAmount, setMaxAmount] = useState('');
+  const [discountPercent, setDiscountPercent] = useState('');
   const [methodId, setMethodId] = useState('');
   const [windowMins, setWindowMins] = useState('30');
 
@@ -413,7 +459,9 @@ function SellTab({ userId }: { userId: string }) {
     if (!methodId) { setError('Add a payment method before publishing an offer.'); return; }
     setBusy(true);
     try {
-      await createSellAdvertisement({ ownerId: userId, price, minAmount, maxAmount, paymentMethodId: methodId, paymentWindowMinutes: mins });
+      const discount = discountPercent ? Number(discountPercent) : 0;
+    if (discount < 0 || discount > 50) { setError('Discount must be between 0% and 50%.'); setBusy(false); return; }
+    await createSellAdvertisement({ ownerId: userId, price, minAmount, maxAmount, paymentMethodId: methodId, paymentWindowMinutes: mins, discountPercent: discount });
       setPrice(''); setMinAmount(''); setMaxAmount(''); await load();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to publish the offer.');
@@ -444,12 +492,14 @@ function SellTab({ userId }: { userId: string }) {
               <li key={method.id}><span>{methodLabels[method.method_type]}</span><span>{method.account_name}</span><span>{method.account_reference_masked}</span></li>
             ))}
           </ul>
-        ) : <EmptyState title="No payment methods" body="Add the Easypaisa, JazzCash, or bank account where buyers will send you PKR." />}
+        ) : <EmptyState title="No payment methods" body="Add a payment method where buyers will send you PKR (Easypaisa, JazzCash, NayaPay, Cashmaal, or bank)." />}
         <form onSubmit={submitMethod}>
           <label>Type
             <select value={pmType} onChange={(event) => setPmType(event.target.value as PaymentMethodType)}>
               <option value="easypaisa">Easypaisa</option>
               <option value="jazzcash">JazzCash</option>
+              <option value="nayapay">NayaPay</option>
+              <option value="cashmaal">Cashmaal</option>
               <option value="bank">Bank transfer</option>
             </select>
           </label>
@@ -498,6 +548,10 @@ function SellTab({ userId }: { userId: string }) {
           <label>Payment window (minutes)
             <input inputMode="numeric" value={windowMins} onChange={(event) => setWindowMins(event.target.value)} placeholder="30" required />
           </label>
+          <label>Seller discount (%) — optional
+            <input inputMode="decimal" value={discountPercent} onChange={(event) => setDiscountPercent(event.target.value)} placeholder="0" min="0" max="50" />
+            <small>Offer a discount to attract buyers faster. 0% = full price. Max 50%.</small>
+          </label>
           <Button type="submit" disabled={busy || !methods.length}>Publish sell offer</Button>
         </form>
       </section>
@@ -505,11 +559,22 @@ function SellTab({ userId }: { userId: string }) {
   );
 }
 
-/** First-cut P2P marketplace: buy USDT from sellers (SELL offers only). USDT is escrowed by LaluPay; PKR is paid buyer→seller off-platform. */
+/** P2P marketplace: buy USDT from sellers (SELL offers only). USDT is escrowed by LaluPay; PKR is paid buyer→seller off-platform. */
 export function P2PPage() {
   const { user } = useAuth();
   const [view, setView] = useState<View>('market');
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [showReactivation, setShowReactivation] = useState(false);
+
+  // Heartbeat: keep the seller's advertisements online while using the P2P page.
+  useEffect(() => {
+    if (!user) return;
+    // Send initial heartbeat immediately.
+    void sendHeartbeat();
+    // Send heartbeat every 5 minutes.
+    const interval = setInterval(() => { void sendHeartbeat(); }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   if (!user) return null;
   return (
@@ -517,8 +582,20 @@ export function P2PPage() {
       <div className="hero">
         <span className="eyebrow">LALLUPAY</span>
         <h1>P2P marketplace</h1>
-        <p>Buy USDT from sellers by paying PKR directly via Easypaisa, JazzCash, or bank transfer. The seller's USDT is escrowed by LaluPay until they confirm your payment.</p>
+        <p>Buy USDT from sellers by paying PKR directly via Easypaisa, JazzCash, NayaPay, Cashmaal, or bank transfer. The seller's USDT is escrowed by LaluPay until they confirm your payment.</p>
       </div>
+
+      {showReactivation && (
+        <Card>
+          <span className="eyebrow">SELLER NOTICE</span>
+          <h2>Your advertisement was taken offline because you were inactive.</h2>
+          <p>Would you like to bring your advertisement online again?</p>
+          <div className="section-heading" style={{ gap: '1rem', marginTop: '1rem' }}>
+            <Button onClick={() => { void sendHeartbeat(); setShowReactivation(false); }}>Bring Online</Button>
+            <Button className="secondary" onClick={() => setShowReactivation(false)}>Keep Offline</Button>
+          </div>
+        </Card>
+      )}
 
       {orderId ? (
         <OrderDetail orderId={orderId} userId={user.id} onBack={() => setOrderId(null)} />

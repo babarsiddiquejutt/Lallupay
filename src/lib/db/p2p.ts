@@ -21,12 +21,13 @@ export async function getMyAdvertisements(userId: string): Promise<P2pAdvertisem
 }
 
 /** Creates the caller's own USDT sell advertisement (RLS enforces owner_id = auth.uid()). BUY ads are intentionally unsupported in this cut. */
-export async function createSellAdvertisement(input: { ownerId: string; price: string; minAmount: string; maxAmount: string; paymentMethodId: string; paymentWindowMinutes: number; }): Promise<P2pAdvertisement> {
+export async function createSellAdvertisement(input: { ownerId: string; price: string; minAmount: string; maxAmount: string; paymentMethodId: string; paymentWindowMinutes: number; discountPercent?: number; }): Promise<P2pAdvertisement> {
   if (!supabase) throw new Error('Supabase is not configured.');
   const { data, error } = await supabase.from('p2p_advertisements').insert({
     owner_id: input.ownerId, side: 'sell', asset_code: 'PKR', price: input.price,
     min_amount: input.minAmount, max_amount: input.maxAmount, status: 'active',
     payment_method_id: input.paymentMethodId, payment_window_minutes: input.paymentWindowMinutes,
+    discount_percent: input.discountPercent ?? 0,
   }).select('*').single();
   if (error) throw error;
   return data;
