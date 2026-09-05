@@ -115,6 +115,25 @@ export async function createPaymentMethod(input: { userId: string; methodType: P
   return data;
 }
 
+export async function updatePaymentMethod(input: { id: string; userId: string; accountName: string; detail: string; }): Promise<PaymentMethod> {
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const trimmed = input.detail.trim();
+  const masked = trimmed.length <= 4 ? trimmed : `${'*'.repeat(Math.max(0, trimmed.length - 4))}${trimmed.slice(-4)}`;
+  const { data, error } = await supabase.from('payment_methods').update({
+    account_name: input.accountName,
+    account_reference_masked: masked,
+    encrypted_details: trimmed,
+  }).eq('id', input.id).eq('user_id', input.userId).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deletePaymentMethod(id: string, userId: string): Promise<void> {
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const { error } = await supabase.from('payment_methods').update({ active: false }).eq('id', id).eq('user_id', userId);
+  if (error) throw error;
+}
+
 // ---- Payment-proof storage (buyer uploads under <orderId>/…, both participants read) ----
 
 /** Uploads the buyer's PKR-payment proof and returns the storage path recorded on the order. */

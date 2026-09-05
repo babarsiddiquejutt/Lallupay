@@ -6,7 +6,7 @@ import { subscribeToTable } from '../lib/realtime';
 import {
   getActiveSellAdvertisements, getActiveBuyAdvertisements, getMyAdvertisements, createSellAdvertisement, setAdvertisementStatus,
   getMyOrders, getOrder, getOrderMessages, sendOrderMessage, getOrderDispute,
-  getMyPaymentMethods, createPaymentMethod, uploadPaymentProof, getPaymentProofUrl,
+  getMyPaymentMethods, createPaymentMethod, updatePaymentMethod, deletePaymentMethod, uploadPaymentProof, getPaymentProofUrl,
 } from '../lib/db/p2p';
 import {
   createSellOrder, createBuyOrder, createBuyAdvertisement, markPaymentSent, releaseOrder, cancelOrder, openDispute, getOrderPaymentDetails,
@@ -31,8 +31,8 @@ const statusMeta: Record<P2pOrderStatus, { label: string; cls: string }> = {
   disputed: { label: 'Disputed', cls: 'review' },
 };
 
-type View = 'sell' | 'buy' | 'create' | 'orders';
-const tabLabels: Record<View, string> = { sell: 'Sell', buy: 'Buy', create: 'Create Order', orders: 'My Orders' };
+type View = 'sell' | 'buy' | 'create' | 'orders' | 'methods';
+const tabLabels: Record<View, string> = { sell: 'Sell', buy: 'Buy', create: 'Create Order', orders: 'My Orders', methods: 'Payment Methods' };
 
 // ---------- SELL marketplace: browse active SELL advertisements from OTHER users (user wants to BUY USDT) ----------
 
@@ -477,6 +477,152 @@ function OrderDetail({ orderId, userId, onBack }: { orderId: string; userId: str
   );
 }
 
+// ---------- Payment Methods: dedicated CRUD tab ----------
+
+function PaymentMethodsTab({ userId }: { userId: string }) {
+  const [methods, setMethods] = useState<PaymentMethod[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // Add form
+  const [showAdd, setShowAdd] = useState(false);
+  const [pmType, setPmType] = useState<PaymentMethodType>('easypaisa');
+  const [pmName, setPmName] = useState('');
+  const [pmDetail, setPmDetail] = useState('');
+
+  // Edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDetail, setEditDetail] = useState('');
+
+  const load = useCallback(async () => {
+    try { setError(''); setMethods(await getMyPaymentMethods(userId)); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to load payment methods.'); }
+    finally { setLoading(false); }
+  }, [userId]);
+  useEffect(() => { void load(); }, [load]);
+
+  async function handleAdd(event: FormEvent) {
+    event.preventDefault(); setError('');
+    if (pmName.trim().length < 2) { setError('Enter the account holder name.'); return; }
+    if (pmDetail.trim().length < 4) { setError('Enter a valid account or wallet number.'); return; }
+    setBusy(true);
+    try {
+      await createPaymentMethod({ userId, methodType: pmType, accountName: pmName.trim(), detail: pmDetail.trim() });
+      setPmName(''); setPmDetail(''); setShowAdd(false); await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to save the payment method.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function startEdit(method: PaymentMethod) {
+    setEditingId(method.id); setEditName(method.account_name); setEditDetail('');
+  }
+
+  async function handleUpdate(id: string) {
+    setError('');
+    if (editName.trim().length < 2) { setError('Enter the account holder name.'); return; }
+    if (editDetail.trim().length < 4) { setError('Enter a valid account or wallet number.'); return; }
+    setBusy(true);
+    try {
+      await updatePaymentMethod({ id, userId, accountName: editName.trim(), detail: editDetail.trim() });
+      setEditingId(null); await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to update the payment method.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this payment method?')) return;
+    setError(''); setBusy(true);
+    try {
+      await deletePaymentMethod(id, userId); await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to delete the payment method.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (loading) return <p>Loading payment methods…</p>;
+  return (
+    <>
+      {error && <p className="error" role="alert">{error}</p>}
+      <section className="card">
+        <div className="section-heading">
+          <h2>Payment Methods</h2>
+          <button type="button" className="link-button" onClick={() => setShowAdd(!showAdd)}>{showAdd ? 'Cancel' : '+ Add New'}</button>
+        </div>
+        <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+          Manage your PKR payment methods for P2P trades. These are used when you buy or sell USDT.
+        </p>
+
+        {showAdd && (
+          <form onSubmit={(event) => void handleAdd(event)} style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--bg-elevated, #ffffff08)', borderRadius: 'var(--radius-md)' }}>
+            <label>Payment type
+              <select value={pmType} onChange={(event) => setPmType(event.target.value as PaymentMethodType)}>
+                <option value="easypaisa">Easypaisa</option>
+                <option value="jazzcash">JazzCash</option>
+                <option value="nayapay">NayaPay</option>
+                <option value="cashmaal">Cashmaal</option>
+                <option value="bank">Bank transfer</option>
+              </select>
+            </label>
+            <label>Account holder name
+              <input value={pmName} onChange={(event) => setPmName(event.target.value)} placeholder="e.g. Muhammad Ali" autoComplete="off" required />
+            </label>
+            <label>Account number / mobile / IBAN
+              <input value={pmDetail} onChange={(event) => setPmDetail(event.target.value)} placeholder="e.g. 03xxxxxxxxx" autoComplete="off" required />
+            </label>
+            <Button type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save payment method'}</Button>
+          </form>
+        )}
+
+        {methods.length ? methods.map((method) => (
+          <div key={method.id} style={{ padding: '1rem', background: 'var(--bg-elevated, #ffffff08)', borderRadius: 'var(--radius-md)', marginBottom: '0.75rem' }}>
+            {editingId === method.id ? (
+              <form onSubmit={(event) => { event.preventDefault(); void handleUpdate(method.id); }}>
+                <div style={{ fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--brand-light-blue, #38bdf8)' }}>{methodLabels[method.method_type]}</div>
+                <label>Account holder name
+                  <input value={editName} onChange={(event) => setEditName(event.target.value)} autoComplete="off" required />
+                </label>
+                <label>New account number (leave unchanged to keep current)
+                  <input value={editDetail} onChange={(event) => setEditDetail(event.target.value)} placeholder="Leave blank to keep current" autoComplete="off" />
+                </label>
+                <div className="section-heading" style={{ gap: '0.75rem' }}>
+                  <Button type="submit" disabled={busy} style={{ width: 'auto' }}>{busy ? 'Saving…' : 'Save'}</Button>
+                  <button type="button" className="link-button" onClick={() => setEditingId(null)}>Cancel</button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div>
+                    <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--brand-light-blue, #38bdf8)' }}>{methodLabels[method.method_type]}</div>
+                    <div style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>{method.account_name}</div>
+                    <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>{method.account_reference_masked}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button type="button" className="link-button" style={{ padding: 0, fontSize: '0.8125rem' }} onClick={() => startEdit(method)}>Edit</button>
+                    <button type="button" className="link-button" style={{ padding: 0, fontSize: '0.8125rem', color: 'var(--color-error)' }} onClick={() => void handleDelete(method.id)}>Delete</button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )) : (
+          <EmptyState title="No payment methods" body="Add a payment method to use in P2P trades. You can add Easypaisa, JazzCash, NayaPay, Cashmaal, or bank transfer." />
+        )}
+      </section>
+    </>
+  );
+}
+
 // ---------- Create Order: payment methods, BUY + SELL ad creation, manage ads ----------
 
 type CreateSide = 'sell' | 'buy';
@@ -776,6 +922,7 @@ export function P2PPage() {
           {view === 'buy' && <BuyMarketplace userId={user.id} onOpenOrder={setOrderId} />}
           {view === 'create' && <CreateOrderTab userId={user.id} />}
           {view === 'orders' && <OrdersTab userId={user.id} onOpenOrder={setOrderId} />}
+          {view === 'methods' && <PaymentMethodsTab userId={user.id} />}
         </>
       )}
     </main>
