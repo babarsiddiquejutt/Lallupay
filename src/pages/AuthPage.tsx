@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
 import { checkLoginLock, recordLoginFailure, clearLoginAttempts } from '../lib/api/auth';
 
-type AuthView = 'login' | 'register' | 'forgot-password' | 'verify-email';
+type AuthView = 'login' | 'register' | 'forgot-password' | 'verify-email' | 'complete-profile';
 
 const RESEND_COOLDOWN = 60; // seconds
 
@@ -40,9 +40,22 @@ export function AuthPage() {
     };
   }, []);
 
+  // After login, check if profile needs completion (e.g. Google OAuth users)
+  useEffect(() => {
+    if (!user || view !== 'login') return;
+    void (async () => {
+      if (!supabase) return;
+      const { data } = await supabase.from('profiles').select('username, mobile').eq('id', user.id).single();
+      if (data && (!data.username || !data.mobile)) {
+        setView('complete-profile');
+        setMessage('');
+      }
+    })();
+  }, [user, view]);
+
   // Real-time username availability check
   useEffect(() => {
-    if (view !== 'register') return;
+    if (view !== 'register' && view !== 'complete-profile') return;
     const trimmed = username.trim();
 
     if (usernameCheckRef.current) clearTimeout(usernameCheckRef.current);
@@ -125,7 +138,24 @@ export function AuthPage() {
     });
   }, [email, view, startLockCountdown]);
 
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (user && view !== 'complete-profile') return <Navigate to="/dashboard" replace />;
+
+  // Validate username format
+  function validateUsername(value: string): string | null {
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed) return 'Username is required.';
+    if (trimmed.length < 3 || trimmed.length > 32) return 'Username must be 3–32 characters.';
+    if (!/^[a-z0-9_]+$/.test(trimmed)) return 'Username must contain only lowercase letters, numbers, and underscores.';
+    return null;
+  }
+
+  // Validate mobile format
+  function validateMobile(value: string): string | null {
+    const trimmed = value.trim();
+    if (!trimmed) return 'Mobile number is required.';
+    if (!/^[0-9+\-() ]{7,20}$/.test(trimmed)) return 'Please enter a valid mobile number (7–20 digits).';
+    return null;
+  }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -133,6 +163,49 @@ export function AuthPage() {
     setBusy(true);
     setMessage('');
     setMessageType('error');
+
+    if (view === 'complete-profile') {
+      // Profile completion after Google OAuth or missing fields
+      const trimmedUsername = username.trim().toLowerCase();
+      const trimmedMobile = mobile.trim();
+
+      const usernameError = validateUsername(trimmedUsername);
+      if (usernameError) { setMessage(usernameError); setBusy(false); return; }
+
+      const mobileError = validateMobile(trimmedMobile);
+      if (mobileError) { setMessage(mobileError); setBusy(false); return; }
+
+      // Server-side username check
+      const { data: availData } = await supabase.rpc('check_username_availability' as never, { p_username: trimmedUsername } as never);
+      const avail = availData as unknown as { available: boolean } | null;
+      if (avail && !avail.available) {
+        setMessage('This username is already taken. Please choose another.');
+        setBusy(false);
+        return;
+      }
+
+      // Update profile
+      const { error } = await supabase
+        .from('profiles')
+        .update({ username: trimmedUsername, mobile: trimmedMobile })
+        .eq('id', user!.id)
+        .is('username', null);
+
+      setBusy(false);
+      if (error) {
+        if (error.message.includes('unique') || error.message.includes('duplicate')) {
+          setMessage('This username or mobile number is already in use. Please try another.');
+        } else {
+          setMessage(error.message);
+        }
+        return;
+      }
+
+      setMessage('Profile completed! Welcome to LaluPay.');
+      setMessageType('success');
+      setView('login');
+      return;
+    }
 
     if (view === 'forgot-password') {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -142,7 +215,6 @@ export function AuthPage() {
       if (error) {
         setMessage(error.message);
       } else {
-        // Clear any lock on this email since password reset is a recovery path
         void clearLoginAttempts(email);
         setLockRemaining(0);
         if (lockCountdownRef.current) clearInterval(lockCountdownRef.current);
@@ -153,46 +225,31 @@ export function AuthPage() {
     }
 
     if (view === 'register') {
-      // Validate username before signup
+      // Validate all fields — all required
       const trimmedUsername = username.trim().toLowerCase();
-      if (trimmedUsername && !/^[a-z0-9_]{3,32}$/.test(trimmedUsername)) {
-        setMessage('Username must be 3–32 lowercase letters, numbers, or underscores.');
-        setMessageType('error');
-        setBusy(false);
-        return;
-      }
-
-      // Validate mobile
       const trimmedMobile = mobile.trim();
-      if (trimmedMobile && !/^[0-9+\-() ]{7,20}$/.test(trimmedMobile)) {
-        setMessage('Please enter a valid mobile number.');
-        setMessageType('error');
-        setBusy(false);
-        return;
-      }
+
+      const usernameError = validateUsername(trimmedUsername);
+      if (usernameError) { setMessage(usernameError); setBusy(false); return; }
+
+      const mobileError = validateMobile(trimmedMobile);
+      if (mobileError) { setMessage(mobileError); setBusy(false); return; }
 
       // Server-side username check
-      if (trimmedUsername) {
-        const { data: availData } = await supabase.rpc('check_username_availability' as never, { p_username: trimmedUsername } as never);
-        const avail = availData as unknown as { available: boolean } | null;
-        if (avail && !avail.available) {
-          setMessage('This username is already taken. Please choose another.');
-          setMessageType('error');
-          setBusy(false);
-          return;
-        }
+      const { data: availData } = await supabase.rpc('check_username_availability' as never, { p_username: trimmedUsername } as never);
+      const avail = availData as unknown as { available: boolean } | null;
+      if (avail && !avail.available) {
+        setMessage('This username is already taken. Please choose another.');
+        setBusy(false);
+        return;
       }
-
-      const metadata: Record<string, string> = {};
-      if (trimmedUsername) metadata.username = trimmedUsername;
-      if (trimmedMobile) metadata.mobile = trimmedMobile;
 
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/dashboard`,
-          data: metadata,
+          data: { username: trimmedUsername, mobile: trimmedMobile },
         },
       });
       setBusy(false);
@@ -205,7 +262,6 @@ export function AuthPage() {
 
       // Check if email confirmation is required
       if (data.user && !data.session) {
-        // No session = email confirmation required
         setView('verify-email');
         setMessage('Verification email sent. Check your inbox and spam folder.');
         setMessageType('success');
@@ -213,14 +269,13 @@ export function AuthPage() {
         return;
       }
 
-      // Auto-confirmed (rare, but possible if mailer_autoconfirm is on)
+      // Auto-confirmed
       setMessage('Account created successfully.');
       setMessageType('success');
       return;
     }
 
     // ─── Login ───
-    // Check lock before attempting
     const lockStatus = await checkLoginLock(email);
     if (lockStatus.locked && lockStatus.remaining_seconds > 0) {
       setBusy(false);
@@ -235,11 +290,8 @@ export function AuthPage() {
 
     if (error) {
       const msg = error.message.toLowerCase();
-
-      // Record the failed attempt and check if we've now locked the account
       const updatedLock = await recordLoginFailure(email);
 
-      // Detect unverified email
       if (msg.includes('email not confirmed') || msg.includes('verify your email')) {
         setView('verify-email');
         setMessage('Please verify your email address before logging in.');
@@ -269,7 +321,6 @@ export function AuthPage() {
       return;
     }
 
-    // Check if user email is actually confirmed
     if (data.user && !data.user.confirmed_at && !data.user.email_confirmed_at) {
       setView('verify-email');
       setMessage('Please verify your email address before logging in.');
@@ -280,7 +331,6 @@ export function AuthPage() {
       return;
     }
 
-    // Successful login — clear any failed attempts
     void clearLoginAttempts(email);
     setLockRemaining(0);
     if (lockCountdownRef.current) clearInterval(lockCountdownRef.current);
@@ -317,6 +367,7 @@ export function AuthPage() {
       case 'forgot-password': return 'Reset your password';
       case 'register': return 'Create your account';
       case 'verify-email': return 'Check your email';
+      case 'complete-profile': return 'Complete your profile';
       default: return 'Sign in';
     }
   }
@@ -370,6 +421,66 @@ export function AuthPage() {
     );
   }
 
+  // Complete profile view (for Google OAuth users or users without username/mobile)
+  if (view === 'complete-profile') {
+    return (
+      <main className="center-page">
+        <section className="auth card">
+          <span className="eyebrow">LALLUPAY</span>
+          <h1>{getTitle()}</h1>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+            Please complete your profile to continue. Username and mobile number are required.
+          </p>
+
+          <form onSubmit={(event) => void submit(event)}>
+            <label>
+              Username *
+              <input
+                type="text"
+                required
+                value={username}
+                onChange={(event) => setUsername(event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                placeholder="e.g. babar123"
+                autoComplete="username"
+                pattern="^[a-z0-9_]{3,32}$"
+                minLength={3}
+                maxLength={32}
+              />
+              <small>
+                {usernameStatus === 'checking' && <span style={{ color: 'var(--text-muted)' }}>Checking availability…</span>}
+                {usernameStatus === 'available' && <span style={{ color: 'var(--color-success)' }}>✓ Username available</span>}
+                {usernameStatus === 'taken' && <span style={{ color: 'var(--color-error)' }}>✕ Username already taken</span>}
+                {usernameStatus === 'invalid' && <span style={{ color: 'var(--color-error)' }}>3–32 lowercase letters, numbers, underscores</span>}
+                {usernameStatus === 'idle' && <span style={{ color: 'var(--text-muted)' }}>3–32 lowercase letters, numbers, underscores</span>}
+              </small>
+            </label>
+            <label>
+              Mobile number *
+              <input
+                type="tel"
+                required
+                value={mobile}
+                onChange={(event) => setMobile(event.target.value)}
+                placeholder="e.g. 03xxxxxxxxx"
+                autoComplete="tel"
+              />
+              <small style={{ color: 'var(--text-muted)' }}>Required for account recovery</small>
+            </label>
+            <Button disabled={busy || usernameStatus === 'taken' || usernameStatus === 'invalid'} type="submit">
+              {busy ? 'Saving…' : 'Complete profile'}
+            </Button>
+          </form>
+
+          {message && (
+            <p role="status" className={messageType === 'error' ? 'error' : 'notice'} style={{ marginTop: '0.5rem' }}>
+              {message}
+            </p>
+          )}
+        </section>
+      </main>
+    );
+  }
+
   const title = getTitle();
 
   return (
@@ -392,9 +503,10 @@ export function AuthPage() {
           {view === 'register' && (
             <>
               <label>
-                Username
+                Username *
                 <input
                   type="text"
+                  required
                   value={username}
                   onChange={(event) => setUsername(event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                   placeholder="e.g. babar123"
@@ -408,23 +520,24 @@ export function AuthPage() {
                   {usernameStatus === 'available' && <span style={{ color: 'var(--color-success)' }}>✓ Username available</span>}
                   {usernameStatus === 'taken' && <span style={{ color: 'var(--color-error)' }}>✕ Username already taken</span>}
                   {usernameStatus === 'invalid' && <span style={{ color: 'var(--color-error)' }}>3–32 lowercase letters, numbers, underscores</span>}
-                  {usernameStatus === 'idle' && <span style={{ color: 'var(--text-muted)' }}>Optional — 3–32 lowercase letters, numbers, underscores</span>}
+                  {usernameStatus === 'idle' && <span style={{ color: 'var(--text-muted)' }}>3–32 lowercase letters, numbers, underscores</span>}
                 </small>
               </label>
               <label>
-                Mobile number
+                Mobile number *
                 <input
                   type="tel"
+                  required
                   value={mobile}
                   onChange={(event) => setMobile(event.target.value)}
                   placeholder="e.g. 03xxxxxxxxx"
                   autoComplete="tel"
                 />
-                <small style={{ color: 'var(--text-muted)' }}>Optional — for account recovery</small>
+                <small style={{ color: 'var(--text-muted)' }}>Required for account recovery</small>
               </label>
             </>
           )}
-          <Button disabled={busy || (view === 'login' && lockRemaining > 0)} type="submit">
+          <Button disabled={busy || (view === 'login' && lockRemaining > 0) || (view === 'register' && (usernameStatus === 'taken' || usernameStatus === 'invalid'))} type="submit">
             {busy ? 'Please wait…' : view === 'forgot-password' ? 'Send reset link' : view === 'register' ? 'Create account' : 'Sign in'}
           </Button>
         </form>
@@ -437,7 +550,7 @@ export function AuthPage() {
           {view === 'login' && (
             <>
               <button className="link-button" onClick={() => { setView('forgot-password'); setMessage(''); }}>Forgot your password?</button>
-              <button className="link-button" onClick={() => { setView('register'); setMessage(''); }}>New here? Create an account</button>
+              <button className="link-button" onClick={() => { setView('register'); setMessage(''); setUsername(''); setMobile(''); setUsernameStatus('idle'); }}>New here? Create an account</button>
             </>
           )}
           {view === 'register' && (

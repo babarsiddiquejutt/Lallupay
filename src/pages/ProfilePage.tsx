@@ -45,12 +45,27 @@ export function ProfilePage() {
     setError('');
     setNotice('');
     try {
-      const trimmedUsername = username.trim() || undefined;
-      const trimmedMobile = mobile.trim() || undefined;
+      const trimmedUsername = username.trim();
+      const trimmedMobile = mobile.trim();
+
+      // Enforce required fields if currently missing
+      if (!profile?.username && !trimmedUsername) {
+        throw new Error('Username is required to complete your profile.');
+      }
+      if (!profile?.mobile && !trimmedMobile) {
+        throw new Error('Mobile number is required to complete your profile.');
+      }
+      if (trimmedUsername && !/^[a-z0-9_]{3,32}$/.test(trimmedUsername)) {
+        throw new Error('Username must be 3–32 lowercase letters, numbers, or underscores.');
+      }
+      if (trimmedMobile && !/^[0-9+\-() ]{7,20}$/.test(trimmedMobile)) {
+        throw new Error('Please enter a valid mobile number.');
+      }
+
       const updated = await updateMyProfile(user.id, {
         full_name: fullName.trim() || undefined as unknown as string,
-        username: trimmedUsername as unknown as string,
-        mobile: trimmedMobile as unknown as string,
+        username: trimmedUsername || undefined as unknown as string,
+        mobile: trimmedMobile || undefined as unknown as string,
       });
       setProfile(updated);
       setEditing(false);
@@ -74,6 +89,20 @@ export function ProfilePage() {
 
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="eyebrow" role="status">{notice}</p>}
+
+      {profile && (!profile.username || !profile.mobile) && (
+        <Card>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: '1rem' }}>Complete your profile</h2>
+              <p style={{ margin: '0.25rem 0 0', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+                {!profile.username && !profile.mobile ? 'Set your username and mobile number to complete your profile.' : !profile.username ? 'Set your username to complete your profile.' : 'Set your mobile number to complete your profile.'}
+              </p>
+            </div>
+            <Button onClick={() => setEditing(true)} style={{ width: 'auto' }}>Complete now</Button>
+          </div>
+        </Card>
+      )}
 
       <Card>
         {profile && !editing ? (
