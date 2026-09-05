@@ -31,39 +31,29 @@ const statusMeta: Record<P2pOrderStatus, { label: string; cls: string }> = {
   disputed: { label: 'Disputed', cls: 'review' },
 };
 
-type View = 'market' | 'orders' | 'create';
-const tabLabels: Record<View, string> = { market: 'Marketplace', orders: 'My orders', create: 'Create Order' };
+type View = 'sell' | 'buy' | 'create' | 'orders';
+const tabLabels: Record<View, string> = { sell: 'Sell', buy: 'Buy', create: 'Create Order', orders: 'My Orders' };
 
-// ---------- Marketplace: browse active sell & buy offers and open an order ----------
+// ---------- SELL marketplace: browse active SELL advertisements from OTHER users (user wants to BUY USDT) ----------
 
-type MarketSide = 'sell' | 'buy';
-
-function MarketTab({ userId, onOpenOrder }: { userId: string; onOpenOrder: (orderId: string) => void }) {
-  const [sellAds, setSellAds] = useState<P2pAdvertisement[]>([]);
-  const [buyAds, setBuyAds] = useState<P2pAdvertisement[]>([]);
+function SellMarketplace({ userId, onOpenOrder }: { userId: string; onOpenOrder: (orderId: string) => void }) {
+  const [ads, setAds] = useState<P2pAdvertisement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [side, setSide] = useState<MarketSide>('sell');
   const [activeAdId, setActiveAdId] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    try {
-      setError('');
-      const [s, b] = await Promise.all([getActiveSellAdvertisements(), getActiveBuyAdvertisements()]);
-      setSellAds(s); setBuyAds(b);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to load offers.'); }
+    try { setError(''); setAds(await getActiveSellAdvertisements()); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to load offers.'); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
 
-  // Filter out own ads.
-  const sellOffers = useMemo(() => sellAds.filter((ad) => ad.owner_id !== userId), [sellAds, userId]);
-  const buyOffers = useMemo(() => buyAds.filter((ad) => ad.owner_id !== userId), [buyAds, userId]);
-  const activeOffers = side === 'sell' ? sellOffers : buyOffers;
+  const offers = useMemo(() => ads.filter((ad) => ad.owner_id !== userId), [ads, userId]);
 
-  async function submitSellOrder(ad: P2pAdvertisement) {
+  async function submitOrder(ad: P2pAdvertisement) {
     setError('');
     if (!pkrPattern.test(amount) || Number(amount) === 0) { setError('Enter a valid PKR amount (up to 2 decimals).'); return; }
     if (Number(amount) < Number(ad.min_amount) || Number(amount) > Number(ad.max_amount)) { setError('Amount is outside the advertised limits.'); return; }
@@ -79,7 +69,67 @@ function MarketTab({ userId, onOpenOrder }: { userId: string; onOpenOrder: (orde
     }
   }
 
-  async function submitBuyOrder(ad: P2pAdvertisement) {
+  if (loading) return <p>Loading sell offers…</p>;
+  return (
+    <>
+      {error && <p className="error" role="alert">{error}</p>}
+      <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Users selling USDT — select an offer to buy USDT from them.</p>
+      {offers.length ? offers.map((ad) => (
+        <Card key={ad.id}>
+          <div className="section-heading">
+            <h2>{trimNum(ad.price)} PKR/USDT</h2>
+            <span className="status" style={{ color: 'var(--color-success)' }}>Seller {shortId(ad.owner_id)}</span>
+          </div>
+          <ul className="transaction-list">
+            {(ad as P2pAdvertisement & { discount_percent?: number }).discount_percent != null && Number((ad as P2pAdvertisement & { discount_percent?: number }).discount_percent) > 0 && (
+              <li><span>Discount</span><span style={{ color: 'var(--color-success)' }}><strong>{trimNum(String((ad as P2pAdvertisement & { discount_percent?: number }).discount_percent))}% off</strong></span></li>
+            )}
+            <li><span>Limits</span><span>{formatAssetAmount(ad.min_amount, 'PKR')} – {formatAssetAmount(ad.max_amount, 'PKR')}</span></li>
+            <li><span>Payment window</span><span>{ad.payment_window_minutes} min</span></li>
+          </ul>
+          {activeAdId === ad.id ? (
+            <form onSubmit={(event) => { event.preventDefault(); void submitOrder(ad); }}>
+              <label>You pay (PKR)
+                <input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" required />
+              </label>
+              {pkrPattern.test(amount) && Number(amount) > 0 && Number(ad.price) > 0 && (
+                <small>You receive ≈ {formatAssetAmount((Number(amount) / Number(ad.price)).toFixed(8), 'USDT')}</small>
+              )}
+              <small>The seller's USDT is escrowed by LaluPay. You pay PKR directly to the seller — their payment details appear once the order opens.</small>
+              <div className="section-heading" style={{ gap: '1rem' }}>
+                <Button type="submit" disabled={busy}>{busy ? 'Opening…' : 'Open order'}</Button>
+                <button type="button" className="link-button" onClick={() => { setActiveAdId(null); setAmount(''); setError(''); }}>Cancel</button>
+              </div>
+            </form>
+          ) : (
+            <Button onClick={() => { setActiveAdId(ad.id); setAmount(''); setError(''); }}>Buy USDT</Button>
+          )}
+        </Card>
+      )) : <EmptyState title="No sell offers available" body="There are no active USDT sell offers right now. Check back soon or create your own sell offer." />}
+    </>
+  );
+}
+
+// ---------- BUY marketplace: browse active BUY advertisements from OTHER users (user wants to SELL USDT) ----------
+
+function BuyMarketplace({ userId, onOpenOrder }: { userId: string; onOpenOrder: (orderId: string) => void }) {
+  const [ads, setAds] = useState<P2pAdvertisement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [activeAdId, setActiveAdId] = useState<string | null>(null);
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setError(''); setAds(await getActiveBuyAdvertisements()); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to load offers.'); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const offers = useMemo(() => ads.filter((ad) => ad.owner_id !== userId), [ads, userId]);
+
+  async function submitOrder(ad: P2pAdvertisement) {
     setError('');
     const usdtPattern = /^\d+(\.\d{1,8})?$/;
     if (!usdtPattern.test(amount) || Number(amount) === 0) { setError('Enter a valid USDT amount (up to 8 decimals).'); return; }
@@ -96,54 +146,40 @@ function MarketTab({ userId, onOpenOrder }: { userId: string; onOpenOrder: (orde
     }
   }
 
-  if (loading) return <p>Loading offers…</p>;
+  if (loading) return <p>Loading buy offers…</p>;
   return (
     <>
       {error && <p className="error" role="alert">{error}</p>}
-
-      {/* Side selector */}
-      <div className="section-heading" style={{ gap: '0.75rem', marginBottom: '1rem' }}>
-        <button type="button" className="link-button" style={{ color: side === 'sell' ? '#fff' : undefined, fontWeight: side === 'sell' ? 700 : 400 }} onClick={() => { setSide('sell'); setActiveAdId(null); setAmount(''); }}>Sell USDT ({sellOffers.length})</button>
-        <button type="button" className="link-button" style={{ color: side === 'buy' ? '#fff' : undefined, fontWeight: side === 'buy' ? 700 : 400 }} onClick={() => { setSide('buy'); setActiveAdId(null); setAmount(''); }}>Buy USDT ({buyOffers.length})</button>
-      </div>
-
-      {activeOffers.length ? activeOffers.map((ad) => (
+      <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Users buying USDT — select an offer to sell your USDT to them.</p>
+      {offers.length ? offers.map((ad) => (
         <Card key={ad.id}>
           <div className="section-heading">
             <h2>{trimNum(ad.price)} PKR/USDT</h2>
-            <span className="status" style={{ color: side === 'sell' ? 'var(--color-success)' : 'var(--color-warning)' }}>
-              {side === 'sell' ? 'Seller' : 'Buyer'} {shortId(ad.owner_id)}
-            </span>
+            <span className="status" style={{ color: 'var(--color-warning)' }}>Buyer {shortId(ad.owner_id)}</span>
           </div>
           <ul className="transaction-list">
-            {(ad as P2pAdvertisement & { discount_percent?: number }).discount_percent != null && Number((ad as P2pAdvertisement & { discount_percent?: number }).discount_percent) > 0 && (
-              <li><span>Discount</span><span style={{ color: 'var(--color-success)' }}><strong>{trimNum(String((ad as P2pAdvertisement & { discount_percent?: number }).discount_percent))}% off</strong></span></li>
-            )}
-            <li><span>Limits</span><span>{formatAssetAmount(ad.min_amount, side === 'sell' ? 'PKR' : 'USDT')} – {formatAssetAmount(ad.max_amount, side === 'sell' ? 'PKR' : 'USDT')}</span></li>
+            <li><span>Limits</span><span>{formatAssetAmount(ad.min_amount, 'USDT')} – {formatAssetAmount(ad.max_amount, 'USDT')}</span></li>
             <li><span>Payment window</span><span>{ad.payment_window_minutes} min</span></li>
           </ul>
           {activeAdId === ad.id ? (
-            <form onSubmit={(event) => { event.preventDefault(); if (side === 'sell') void submitSellOrder(ad); else void submitBuyOrder(ad); }}>
-              <label>{side === 'sell' ? 'You pay (PKR)' : 'You sell (USDT)'}
+            <form onSubmit={(event) => { event.preventDefault(); void submitOrder(ad); }}>
+              <label>You sell (USDT)
                 <input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" required />
               </label>
-              {side === 'sell' && pkrPattern.test(amount) && Number(amount) > 0 && Number(ad.price) > 0 && (
-                <small>You receive ≈ {formatAssetAmount((Number(amount) / Number(ad.price)).toFixed(8), 'USDT')}</small>
-              )}
-              {side === 'buy' && /^\d+(\.\d{1,8})?$/.test(amount) && Number(amount) > 0 && Number(ad.price) > 0 && (
+              {/^\d+(\.\d{1,8})?$/.test(amount) && Number(amount) > 0 && Number(ad.price) > 0 && (
                 <small>You receive ≈ {formatAssetAmount((Number(amount) * Number(ad.price)).toFixed(2), 'PKR')}</small>
               )}
-              <small>{side === 'sell' ? "The seller's USDT is escrowed by LaluPay. You pay PKR directly to the seller — their payment details appear once the order opens." : "Your USDT is escrowed by LaluPay. The buyer will pay you PKR directly."}</small>
+              <small>Your USDT is escrowed by LaluPay. The buyer will pay you PKR directly — their payment details appear once the order opens.</small>
               <div className="section-heading" style={{ gap: '1rem' }}>
                 <Button type="submit" disabled={busy}>{busy ? 'Opening…' : 'Open order'}</Button>
                 <button type="button" className="link-button" onClick={() => { setActiveAdId(null); setAmount(''); setError(''); }}>Cancel</button>
               </div>
             </form>
           ) : (
-            <Button onClick={() => { setActiveAdId(ad.id); setAmount(''); setError(''); }}>{side === 'sell' ? 'Buy USDT' : 'Sell USDT'}</Button>
+            <Button onClick={() => { setActiveAdId(ad.id); setAmount(''); setError(''); }}>Sell USDT</Button>
           )}
         </Card>
-      )) : <EmptyState title={side === 'sell' ? 'No sell offers' : 'No buy offers'} body={side === 'sell' ? 'There are no active USDT sell offers right now. Check back soon or create a buy offer.' : 'There are no active USDT buy offers right now. Check back soon or create a sell offer.'} />}
+      )) : <EmptyState title="No buy offers available" body="There are no active USDT buy offers right now. Check back soon or create your own buy offer." />}
     </>
   );
 }
@@ -692,7 +728,7 @@ function CreateOrderTab({ userId }: { userId: string }) {
 /** P2P marketplace: buy USDT from sellers (SELL offers only). USDT is escrowed by LaluPay; PKR is paid buyer→seller off-platform. */
 export function P2PPage() {
   const { user } = useAuth();
-  const [view, setView] = useState<View>('market');
+  const [view, setView] = useState<View>('sell');
   const [orderId, setOrderId] = useState<string | null>(null);
   const [showReactivation, setShowReactivation] = useState(false);
 
@@ -712,10 +748,7 @@ export function P2PPage() {
       <div className="hero">
         <span className="eyebrow">LALLUPAY</span>
         <h1>P2P marketplace</h1>
-        <p>Buy USDT from sellers by paying PKR directly via Easypaisa, JazzCash, NayaPay, Cashmaal, or bank transfer. The seller's USDT is escrowed by LaluPay until they confirm your payment.</p>
-        <div style={{ marginTop: '1rem' }}>
-          <Button onClick={() => setView('create')} style={{ width: 'auto', minWidth: '160px' }}>Create Order</Button>
-        </div>
+        <p>Buy or sell USDT directly with other users. Pay via Easypaisa, JazzCash, NayaPay, Cashmaal, or bank transfer. USDT is escrowed by LaluPay for safety.</p>
       </div>
 
       {showReactivation && (
@@ -734,20 +767,15 @@ export function P2PPage() {
         <OrderDetail orderId={orderId} userId={user.id} onBack={() => setOrderId(null)} />
       ) : (
         <>
-          {/* Mobile-friendly Create Order button (visible below tabs on small screens) */}
-          <Button
-            onClick={() => setView('create')}
-            style={{ width: '100%', marginBottom: '1rem', display: 'none' }}
-            className="mobile-create-order"
-          >Create Order</Button>
-          <div className="section-heading p2p-tabs" style={{ justifyContent: 'flex-start', gap: '1.25rem', marginBottom: '1rem' }}>
+          <div className="section-heading p2p-tabs" style={{ justifyContent: 'flex-start', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
             {(Object.keys(tabLabels) as View[]).map((value) => (
-              <button key={value} type="button" className="link-button" style={{ color: view === value ? '#fff' : undefined, fontWeight: view === value ? 700 : 400 }} onClick={() => setView(value)}>{tabLabels[value]}</button>
+              <button key={value} type="button" className="link-button" style={{ color: view === value ? '#fff' : undefined, fontWeight: view === value ? 700 : 400, fontSize: '0.9375rem' }} onClick={() => setView(value)}>{tabLabels[value]}</button>
             ))}
           </div>
-          {view === 'market' && <MarketTab userId={user.id} onOpenOrder={setOrderId} />}
-          {view === 'orders' && <OrdersTab userId={user.id} onOpenOrder={setOrderId} />}
+          {view === 'sell' && <SellMarketplace userId={user.id} onOpenOrder={setOrderId} />}
+          {view === 'buy' && <BuyMarketplace userId={user.id} onOpenOrder={setOrderId} />}
           {view === 'create' && <CreateOrderTab userId={user.id} />}
+          {view === 'orders' && <OrdersTab userId={user.id} onOpenOrder={setOrderId} />}
         </>
       )}
     </main>
