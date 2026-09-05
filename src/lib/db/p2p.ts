@@ -13,6 +13,14 @@ export async function getActiveSellAdvertisements(): Promise<P2pAdvertisement[]>
   return data;
 }
 
+/** Active buy advertisements available for sellers to take. */
+export async function getActiveBuyAdvertisements(): Promise<P2pAdvertisement[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.from('p2p_advertisements').select('*').eq('status', 'active').eq('side', 'buy').order('price', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
 export async function getMyAdvertisements(userId: string): Promise<P2pAdvertisement[]> {
   if (!supabase) return [];
   const { data, error } = await supabase.from('p2p_advertisements').select('*').eq('owner_id', userId).order('created_at', { ascending: false });

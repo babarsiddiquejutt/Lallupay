@@ -28,6 +28,16 @@ export function createSellOrder(input: { advertisementId: string; amount: string
   return invokeP2p<OrderResponse>({ action: 'createSellOrder', ...input });
 }
 
+/** Opens a USDT buy order against an active BUY advertisement. The buyer's USDT is escrowed server-side. */
+export function createBuyOrder(input: { advertisementId: string; amount: string; idempotencyKey: string; }): Promise<OrderResponse> {
+  return invokeP2p<OrderResponse>({ action: 'createBuyOrder', ...input });
+}
+
+/** Creates a BUY advertisement (user wants to buy USDT). */
+export function createBuyAdvertisement(input: { price: string; cryptoAmount: string; minAmount: string; maxAmount: string; paymentMethodId: string; paymentWindowMinutes: number; }): Promise<{ advertisementId: string }> {
+  return invokeP2p<{ advertisementId: string }>({ action: 'createBuyAdvertisement', ...input });
+}
+
 /** Buyer marks that PKR has been paid to the seller off-platform, optionally attaching a proof-of-payment storage path. Moves no funds. */
 export function markPaymentSent(input: { orderId: string; proofPath?: string; }): Promise<OrderResponse> {
   return invokeP2p<OrderResponse>({ action: 'markPaymentSent', ...input });

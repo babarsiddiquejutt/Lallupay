@@ -6,6 +6,8 @@ import { requiredEnv } from '../_shared/env.ts';
 // that locks balances, snapshots the price, and writes balanced double-entry ledger records.
 type P2pRequest =
   | { action: 'createSellOrder'; advertisementId: string; amount: string; idempotencyKey: string }
+  | { action: 'createBuyOrder'; advertisementId: string; amount: string; idempotencyKey: string }
+  | { action: 'createBuyAdvertisement'; price: string; cryptoAmount: string; minAmount: string; maxAmount: string; paymentMethodId: string; paymentWindowMinutes: number }
   | { action: 'markPaymentSent'; orderId: string; proofPath?: string }
   | { action: 'release'; orderId: string }
   | { action: 'cancel'; orderId: string }
@@ -37,6 +39,31 @@ Deno.serve(async (request) => {
     if (!isUuid(body.advertisementId) || !pkrAmount.test(body.amount ?? '') || body.amount === '0' || typeof body.idempotencyKey !== 'string' || body.idempotencyKey.length < 16) return reply({ error: 'Invalid order request' }, 400);
     const { data, error } = await admin.rpc('create_p2p_sell_order', { p_ad: body.advertisementId, p_buyer: user.id, p_amount: body.amount, p_key: body.idempotencyKey });
     return error ? reply({ error: error.message }, 400) : reply({ orderId: data }, 201);
+  }
+
+  if (body.action === 'createBuyOrder') {
+    const usdtAmount = /^\d+(\.\d{1,8})?$/;
+    if (!isUuid(body.advertisementId) || !usdtAmount.test(body.amount ?? '') || body.amount === '0' || typeof body.idempotencyKey !== 'string' || body.idempotencyKey.length < 16) return reply({ error: 'Invalid buy order request' }, 400);
+    const { data, error } = await admin.rpc('create_p2p_buy_order', { p_ad: body.advertisementId, p_seller: user.id, p_amount: body.amount, p_key: body.idempotencyKey });
+    return error ? reply({ error: error.message }, 400) : reply({ orderId: data }, 201);
+  }
+
+  if (body.action === 'createBuyAdvertisement') {
+    const usdtAmount = /^\d+(\.\d{1,8})?$/;
+    if (!usdtAmount.test(body.cryptoAmount ?? '') || body.cryptoAmount === '0'
+        || !pkrAmount.test(body.price ?? '') || body.price === '0'
+        || !pkrAmount.test(body.minAmount ?? '') || !pkrAmount.test(body.maxAmount ?? '')
+        || Number(body.minAmount) > Number(body.maxAmount)
+        || !isUuid(body.paymentMethodId)
+        || !Number.isInteger(body.paymentWindowMinutes) || body.paymentWindowMinutes < 5 || body.paymentWindowMinutes > 1440) {
+      return reply({ error: 'Invalid buy advertisement parameters' }, 400);
+    }
+    const { data, error } = await admin.rpc('create_buy_advertisement', {
+      p_owner: user.id, p_price: body.price, p_crypto_amount: body.cryptoAmount,
+      p_min_amount: body.minAmount, p_max_amount: body.maxAmount,
+      p_payment_method_id: body.paymentMethodId, p_payment_window_minutes: body.paymentWindowMinutes,
+    });
+    return error ? reply({ error: error.message }, 400) : reply({ advertisementId: data }, 201);
   }
 
   if (body.action === 'markPaymentSent') {
