@@ -14,6 +14,8 @@ export function AuthPage() {
   const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('');
+  const [mobile, setMobile] = useState('');
   const [view, setView] = useState<AuthView>('login');
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'error' | 'success'>('error');
@@ -25,13 +27,47 @@ export function AuthPage() {
   const [lockRemaining, setLockRemaining] = useState(0);
   const lockCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Username availability
+  const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle');
+  const usernameCheckRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Cleanup countdowns on unmount
   useEffect(() => {
     return () => {
       if (countdownRef.current) clearInterval(countdownRef.current);
       if (lockCountdownRef.current) clearInterval(lockCountdownRef.current);
+      if (usernameCheckRef.current) clearTimeout(usernameCheckRef.current);
     };
   }, []);
+
+  // Real-time username availability check
+  useEffect(() => {
+    if (view !== 'register') return;
+    const trimmed = username.trim();
+
+    if (usernameCheckRef.current) clearTimeout(usernameCheckRef.current);
+
+    if (trimmed.length < 3) {
+      setUsernameStatus(trimmed.length === 0 ? 'idle' : 'invalid');
+      return;
+    }
+
+    if (!/^[a-z0-9_]{3,32}$/.test(trimmed)) {
+      setUsernameStatus('invalid');
+      return;
+    }
+
+    setUsernameStatus('checking');
+
+    usernameCheckRef.current = setTimeout(async () => {
+      if (!supabase) { setUsernameStatus('idle'); return; }
+      const { data } = await supabase.rpc('check_username_availability' as never, { p_username: trimmed } as never);
+      const result = data as unknown as { available: boolean } | null;
+      setUsernameStatus(result?.available ? 'available' : 'taken');
+    }, 400);
+
+    return () => { if (usernameCheckRef.current) clearTimeout(usernameCheckRef.current); };
+  }, [username, view]);
 
   const startLockCountdown = useCallback((seconds: number) => {
     setLockRemaining(seconds);
@@ -117,10 +153,47 @@ export function AuthPage() {
     }
 
     if (view === 'register') {
+      // Validate username before signup
+      const trimmedUsername = username.trim().toLowerCase();
+      if (trimmedUsername && !/^[a-z0-9_]{3,32}$/.test(trimmedUsername)) {
+        setMessage('Username must be 3–32 lowercase letters, numbers, or underscores.');
+        setMessageType('error');
+        setBusy(false);
+        return;
+      }
+
+      // Validate mobile
+      const trimmedMobile = mobile.trim();
+      if (trimmedMobile && !/^[0-9+\-() ]{7,20}$/.test(trimmedMobile)) {
+        setMessage('Please enter a valid mobile number.');
+        setMessageType('error');
+        setBusy(false);
+        return;
+      }
+
+      // Server-side username check
+      if (trimmedUsername) {
+        const { data: availData } = await supabase.rpc('check_username_availability' as never, { p_username: trimmedUsername } as never);
+        const avail = availData as unknown as { available: boolean } | null;
+        if (avail && !avail.available) {
+          setMessage('This username is already taken. Please choose another.');
+          setMessageType('error');
+          setBusy(false);
+          return;
+        }
+      }
+
+      const metadata: Record<string, string> = {};
+      if (trimmedUsername) metadata.username = trimmedUsername;
+      if (trimmedMobile) metadata.mobile = trimmedMobile;
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: `${window.location.origin}/dashboard` },
+        options: {
+          emailRedirectTo: `${window.location.origin}/dashboard`,
+          data: metadata,
+        },
       });
       setBusy(false);
 
@@ -315,6 +388,41 @@ export function AuthPage() {
               Password
               <input required minLength={8} type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={view === 'register' ? 'new-password' : 'current-password'} />
             </label>
+          )}
+          {view === 'register' && (
+            <>
+              <label>
+                Username
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                  placeholder="e.g. babar123"
+                  autoComplete="username"
+                  pattern="^[a-z0-9_]{3,32}$"
+                  minLength={3}
+                  maxLength={32}
+                />
+                <small>
+                  {usernameStatus === 'checking' && <span style={{ color: 'var(--text-muted)' }}>Checking availability…</span>}
+                  {usernameStatus === 'available' && <span style={{ color: 'var(--color-success)' }}>✓ Username available</span>}
+                  {usernameStatus === 'taken' && <span style={{ color: 'var(--color-error)' }}>✕ Username already taken</span>}
+                  {usernameStatus === 'invalid' && <span style={{ color: 'var(--color-error)' }}>3–32 lowercase letters, numbers, underscores</span>}
+                  {usernameStatus === 'idle' && <span style={{ color: 'var(--text-muted)' }}>Optional — 3–32 lowercase letters, numbers, underscores</span>}
+                </small>
+              </label>
+              <label>
+                Mobile number
+                <input
+                  type="tel"
+                  value={mobile}
+                  onChange={(event) => setMobile(event.target.value)}
+                  placeholder="e.g. 03xxxxxxxxx"
+                  autoComplete="tel"
+                />
+                <small style={{ color: 'var(--text-muted)' }}>Optional — for account recovery</small>
+              </label>
+            </>
           )}
           <Button disabled={busy || (view === 'login' && lockRemaining > 0)} type="submit">
             {busy ? 'Please wait…' : view === 'forgot-password' ? 'Send reset link' : view === 'register' ? 'Create account' : 'Sign in'}

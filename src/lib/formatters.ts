@@ -1,8 +1,9 @@
 import type { AssetCode } from '../types/database';
 
 /** Formats database NUMERIC strings without floating-point precision loss. */
-export function formatAssetAmount(value: string, asset: AssetCode): string {
-  const [rawInteger, rawFraction = ''] = value.split('.');
+export function formatAssetAmount(value: string | number, asset: AssetCode): string {
+  const str = String(value ?? '0');
+  const [rawInteger, rawFraction = ''] = str.split('.');
   const negative = rawInteger.startsWith('-');
   const integer = (negative ? rawInteger.slice(1) : rawInteger).replace(/^0+(?=\d)/, '') || '0';
   const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ',');

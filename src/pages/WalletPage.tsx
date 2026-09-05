@@ -19,13 +19,19 @@ export function WalletPage() {
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     try {
       setError('');
-      const [nextWallets, transactionPage] = await Promise.all([getWallets(user.id), getTransactionsPage(user.id, 0, transactionPageSize)]);
-      setWallets(nextWallets);
-      setTransactions(transactionPage.items);
-      setTransactionTotal(transactionPage.total);
+      const [nextWallets, transactionPage] = await Promise.all([
+        getWallets(user.id),
+        getTransactionsPage(user.id, 0, transactionPageSize),
+      ]);
+      setWallets(nextWallets ?? []);
+      setTransactions(transactionPage.items ?? []);
+      setTransactionTotal(transactionPage.total ?? 0);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to load wallet data.');
     } finally {
@@ -42,5 +48,54 @@ export function WalletPage() {
   }, [load, user]);
 
   if (loading) return <main className="page"><p>Loading wallet…</p></main>;
-  return <main className="page"><div className="hero"><span className="eyebrow">LALLUPAY</span><h1>Wallet activity</h1><p>Balances are derived from the server-side ledger and update in real time.</p></div>{error && <p className="error">{error}</p>}<section className="wallet-grid">{wallets.length ? wallets.map((wallet) => <Card key={wallet.id}><span>{wallet.asset_code} balance</span><strong>{formatAssetAmount(wallet.balance_snapshot, wallet.asset_code)}</strong><small>Updated {formatTimestamp(wallet.updated_at)}</small></Card>) : <EmptyState title="No wallets available" body="Wallets are automatically created after your account is provisioned." />}</section><section className="card"><div className="section-heading"><h2>Transaction history</h2><span>{transactionTotal} records</span></div>{transactions.length ? <ul className="transaction-list">{transactions.map((transaction) => <li key={transaction.id}><span>{transaction.type}</span><span>{formatAssetAmount(transaction.net_amount, transaction.asset_code)}</span><span className={`status ${transaction.status}`}>{transaction.status}</span></li>)}</ul> : <EmptyState title="No transactions yet" body="Completed deposits, transfers, conversions, and withdrawals will appear here." />}</section></main>;
+
+  return (
+    <main className="page">
+      <div className="hero">
+        <span className="eyebrow">LALLUPAY</span>
+        <h1>Wallet activity</h1>
+        <p>Balances are derived from the server-side ledger and update in real time.</p>
+      </div>
+
+      {error && <p className="error" role="alert">{error}</p>}
+
+      <section className="wallet-grid">
+        {wallets.length > 0 ? wallets.map((wallet) => (
+          <Card key={wallet.id}>
+            <span>{wallet.asset_code} balance</span>
+            <strong>{formatAssetAmount(String(wallet.balance_snapshot ?? '0'), wallet.asset_code)}</strong>
+            <small>Updated {formatTimestamp(wallet.updated_at)}</small>
+          </Card>
+        )) : (
+          <EmptyState title="No wallets available" body="Wallets are automatically created after your account is provisioned." />
+        )}
+      </section>
+
+      <section className="card">
+        <div className="section-heading">
+          <h2>Transaction history</h2>
+          <span>{transactionTotal} records</span>
+        </div>
+        {transactions.length > 0 ? (
+          <ul className="transaction-list">
+            {transactions.map((transaction) => (
+              <li key={transaction.id}>
+                <span>{transaction.type}</span>
+                <span>{formatAssetAmount(String(transaction.net_amount ?? '0'), transaction.asset_code)}</span>
+                <span className={`status ${transaction.status}`}>{transaction.status}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <EmptyState title="No transactions yet" body="Completed deposits, transfers, conversions, and withdrawals will appear here." />
+        )}
+      </section>
+
+      {!error && wallets.length === 0 && transactions.length === 0 && (
+        <section className="card">
+          <EmptyState title="Get started" body="Fund your wallet with a deposit or receive a transfer to begin." />
+        </section>
+      )}
+    </main>
+  );
 }

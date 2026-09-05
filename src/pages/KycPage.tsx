@@ -39,12 +39,19 @@ export function KycPage() {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    if (!user || !supabase) return;
+    if (!user || !supabase) {
+      setLoading(false);
+      return;
+    }
     try {
       setError('');
       const [profileData, subData] = await Promise.all([
         getMyProfile(user.id),
-        supabase.from('kyc_submissions' as never).select('*').eq('user_id', user.id).order('created_at', { ascending: false }) as never,
+        supabase
+          .from('kyc_submissions' as never)
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }) as never,
       ]);
       setProfile(profileData);
       setSubmissions((subData as unknown as { data: KycSubmission[] | null })?.data ?? []);
@@ -127,7 +134,7 @@ export function KycPage() {
       <div className="hero">
         <span className="eyebrow">LALLUPAY</span>
         <h1>Identity verification</h1>
-        <p>Submit your identity documents to verify your account. Verified accounts can access all platform features.</p>
+        <p>Submit your identity documents to verify your account. Verified accounts can access all platform features including withdrawals.</p>
       </div>
 
       {error && <p className="error" role="alert">{error}</p>}
@@ -142,12 +149,24 @@ export function KycPage() {
           </span>
         </div>
         <ul className="transaction-list">
+          <li>
+            <span>Email</span>
+            <span>{user?.email ?? '—'}</span>
+          </li>
           <li><span>KYC tier</span><span>{profile?.kyc_tier ?? 0}</span></li>
           <li><span>Submissions</span><span>{submissions.length}</span></li>
-          {latestStatus && <li><span>Latest status</span><span className={`status ${latestStatus === 'approved' ? 'completed' : latestStatus === 'rejected' ? 'cancelled' : 'pending'}`}>{latestStatus}</span></li>}
+          {latestStatus && (
+            <li>
+              <span>Latest status</span>
+              <span className={`status ${latestStatus === 'approved' ? 'completed' : latestStatus === 'rejected' ? 'cancelled' : 'pending'}`}>{latestStatus}</span>
+            </li>
+          )}
         </ul>
         {profile?.kyc_status === 'rejected' && submissions[0]?.rejection_reason && (
           <p style={{ marginTop: '0.5rem' }}><small style={{ color: 'var(--color-error)' }}>Rejection reason: {submissions[0].rejection_reason}</small></p>
+        )}
+        {profile?.kyc_status === 'approved' && (
+          <p style={{ marginTop: '0.5rem' }}><small style={{ color: 'var(--color-success)' }}>Your identity has been verified. You can now make withdrawals.</small></p>
         )}
       </Card>
 
@@ -156,6 +175,13 @@ export function KycPage() {
         <Card>
           <h2>Submit documents</h2>
           <p>Upload clear photos of your identity documents. Accepted formats: JPEG, PNG, PDF (max 10 MB each).</p>
+
+          {/* Email shown as read-only — always from authenticated session */}
+          <div style={{ marginBottom: '1rem', padding: '0.75rem', background: 'var(--bg-elevated, #ffffff08)', borderRadius: 'var(--radius-md)', fontSize: '0.875rem' }}>
+            <span style={{ color: 'var(--text-muted)' }}>Verification email:</span>
+            <span style={{ marginLeft: '0.5rem', fontWeight: 500 }}>{user?.email ?? '—'}</span>
+          </div>
+
           <form onSubmit={(event) => void submitKyc(event)}>
             <label>
               {docLabels.national_id_front}
@@ -179,6 +205,7 @@ export function KycPage() {
           <span className="eyebrow">Submission in progress</span>
           <h2>Your KYC is under review</h2>
           <p>A team member will review your documents. This typically takes 1–24 hours.</p>
+          <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>You will be able to withdraw once your identity is verified.</p>
         </Card>
       )}
 
