@@ -484,6 +484,17 @@ function SellTab({ userId }: { userId: string }) {
     <>
       {error && <p className="error" role="alert">{error}</p>}
 
+      {/* Create Order header */}
+      <section className="card">
+        <div className="section-heading">
+          <h2>Create Order — Sell USDT</h2>
+          <span className="status completed">SELL</span>
+        </div>
+        <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+          Create a sell advertisement to offer your USDT to buyers. Set your price, order limits, and payment method. Your USDT is escrowed only when a buyer opens an order against your offer.
+        </p>
+      </section>
+
       <section className="card">
         <div className="section-heading"><h2>Payment methods</h2><span>{methods.length}</span></div>
         {methods.length ? (
@@ -552,7 +563,7 @@ function SellTab({ userId }: { userId: string }) {
             <input inputMode="decimal" value={discountPercent} onChange={(event) => setDiscountPercent(event.target.value)} placeholder="0" min="0" max="50" />
             <small>Offer a discount to attract buyers faster. 0% = full price. Max 50%.</small>
           </label>
-          <Button type="submit" disabled={busy || !methods.length}>Publish sell offer</Button>
+          <Button type="submit" disabled={busy || !methods.length}>{busy ? 'Publishing…' : 'Publish sell offer'}</Button>
         </form>
       </section>
     </>
@@ -583,6 +594,9 @@ export function P2PPage() {
         <span className="eyebrow">LALLUPAY</span>
         <h1>P2P marketplace</h1>
         <p>Buy USDT from sellers by paying PKR directly via Easypaisa, JazzCash, NayaPay, Cashmaal, or bank transfer. The seller's USDT is escrowed by LaluPay until they confirm your payment.</p>
+        <div style={{ marginTop: '1rem' }}>
+          <Button onClick={() => setView('sell')} style={{ width: 'auto', minWidth: '160px' }}>Create Order</Button>
+        </div>
       </div>
 
       {showReactivation && (
@@ -601,6 +615,12 @@ export function P2PPage() {
         <OrderDetail orderId={orderId} userId={user.id} onBack={() => setOrderId(null)} />
       ) : (
         <>
+          {/* Mobile-friendly Create Order button (visible below tabs on small screens) */}
+          <Button
+            onClick={() => setView('sell')}
+            style={{ width: '100%', marginBottom: '1rem', display: 'none' }}
+            className="mobile-create-order"
+          >Create Order</Button>
           <div className="section-heading p2p-tabs" style={{ justifyContent: 'flex-start', gap: '1.25rem', marginBottom: '1rem' }}>
             {(Object.keys(tabLabels) as View[]).map((value) => (
               <button key={value} type="button" className="link-button" style={{ color: view === value ? '#fff' : undefined, fontWeight: view === value ? 700 : 400 }} onClick={() => setView(value)}>{tabLabels[value]}</button>
