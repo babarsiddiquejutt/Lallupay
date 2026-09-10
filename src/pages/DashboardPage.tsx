@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Card, EmptyState } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
 import { getWallets } from '../lib/db/wallets';
@@ -48,12 +48,46 @@ export function DashboardPage() {
     }
   }
 
+  const navigate = useNavigate();
+
   return (
     <main className="page">
       <div className="hero">
         <span className="eyebrow">LALLUPAY</span>
         <h1>Your financial home</h1>
         <p>Balances and transactions update in real time.</p>
+      </div>
+
+      {/* Download App Banner */}
+      <div
+        className="download-banner"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1rem',
+          padding: '1rem 1.25rem',
+          marginBottom: '1.5rem',
+          background: 'linear-gradient(135deg, #111111 0%, #0a1628 100%)',
+          border: '1px solid var(--brand-blue)',
+          borderRadius: 'var(--radius-lg)',
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
+          <span style={{ fontSize: '1.5rem', flexShrink: 0 }}>📲</span>
+          <div style={{ minWidth: 0 }}>
+            <strong style={{ fontSize: '0.9375rem', display: 'block' }}>Get the LaluPay App</strong>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>Available on Android, iOS, Windows, Mac & Web</span>
+          </div>
+        </div>
+        <button
+          className="button small"
+          style={{ width: 'auto', flexShrink: 0 }}
+          onClick={() => navigate('/download')}
+        >
+          Download App
+        </button>
       </div>
       {error && <p className="error">{error}</p>}
 

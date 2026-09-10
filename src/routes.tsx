@@ -22,6 +22,7 @@ import { AdminRatesPage } from './pages/admin/AdminRatesPage';
 import { AdminDepositsWithdrawalsPage } from './pages/admin/AdminDepositsWithdrawalsPage';
 import { DepositPage } from './pages/DepositPage';
 import { WithdrawPage } from './pages/WithdrawPage';
+import { DownloadPage } from './pages/DownloadPage';
 
 function ProtectedRoute() {
   const { user, loading } = useAuth();
@@ -43,6 +44,7 @@ function AdminRoute() {
 export function AppRoutes() {
   return (
     <Routes>
+      <Route path="/download" element={<DownloadPage />} />
       <Route path="/auth" element={<AuthPage />} />
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<DashboardPage />} />

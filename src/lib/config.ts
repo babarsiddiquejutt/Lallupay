@@ -16,4 +16,11 @@ function isValidHttpUrl(value: string | undefined): boolean {
   }
 }
 
-export const appConfig = { url, anonKey, isSupabaseConfigured: isValidHttpUrl(url) && Boolean(anonKey) };
+const androidDownloadUrl = import.meta.env.VITE_ANDROID_DOWNLOAD_URL?.trim() || '';
+
+export const appConfig = {
+  url,
+  anonKey,
+  isSupabaseConfigured: isValidHttpUrl(url) && Boolean(anonKey),
+  androidDownloadUrl,
+};
